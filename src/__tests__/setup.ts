@@ -13,6 +13,9 @@ const browserMock = {
     onInstalled: {
       addListener: vi.fn(),
     },
+    onStartup: {
+      addListener: vi.fn(),
+    },
   },
   storage: {
     local: {
@@ -26,6 +29,15 @@ const browserMock = {
     query: vi.fn(),
     sendMessage: vi.fn(),
     create: vi.fn(),
+    onUpdated: {
+      addListener: vi.fn(),
+    },
+    onActivated: {
+      addListener: vi.fn(),
+    },
+    onRemoved: {
+      addListener: vi.fn(),
+    },
   },
   alarms: {
     create: vi.fn(),
@@ -65,6 +77,11 @@ const cryptoMock = {
 };
 
 vi.stubGlobal("crypto", cryptoMock);
+
+// Mock self for service worker context
+vi.stubGlobal("self", {
+  addEventListener: vi.fn(),
+});
 
 // Reset mocks before each test
 beforeEach(() => {

@@ -48,7 +48,8 @@ export type MessageType =
   | "EXTRACT_JOB_DATA"
   | "SAVE_APPLICATION"
   | "CHECK_DUPLICATE"
-  | "REFRESH_TOKEN";
+  | "REFRESH_TOKEN"
+  | "LOGOUT";
 
 /**
  * Base message structure

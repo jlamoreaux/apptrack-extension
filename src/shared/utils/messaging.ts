@@ -3,7 +3,7 @@
  */
 
 import browser from "webextension-polyfill";
-import type { MessageType, MessageResponse, JobData, AuthState } from "@/shared/types";
+import type { MessageType, MessageResponse, JobData, AuthState, ApplicationPayload } from "@/shared/types";
 
 /**
  * Send a message to the background script
@@ -55,13 +55,57 @@ export const messages = {
   /**
    * Get the current auth state
    */
-  async getAuthState(): Promise<AuthState> {
-    const response = await sendToBackground<AuthState>("GET_AUTH_STATE");
+  async getAuthState(): Promise<AuthState & { expiresAt?: number }> {
+    const response = await sendToBackground<AuthState & { expiresAt?: number }>("GET_AUTH_STATE");
     return response.data ?? { isAuthenticated: false };
   },
 
   /**
-   * Extract job data from the current page
+   * Set auth state (after OAuth flow)
+   */
+  async setAuthState(authData: {
+    token: string;
+    refreshToken?: string;
+    expiresAt: number;
+    userId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const response = await sendToBackground<{ success: boolean; error?: string }>(
+      "SET_AUTH_STATE",
+      authData
+    );
+    return { success: response.success ?? false, error: response.error };
+  },
+
+  /**
+   * Logout and clear auth state
+   */
+  async logout(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("LOGOUT");
+    return { success: response.success ?? false };
+  },
+
+  /**
+   * Manually trigger token refresh
+   */
+  async refreshToken(): Promise<{ success: boolean; error?: string }> {
+    const response = await sendToBackground<{ success: boolean; error?: string }>("REFRESH_TOKEN");
+    return { success: response.success ?? false, error: response.error };
+  },
+
+  /**
+   * Get job data from the current tab
+   */
+  async getJobData(): Promise<{ success: boolean; data?: JobData; error?: string }> {
+    const response = await sendToBackground<JobData>("GET_JOB_DATA");
+    return {
+      success: response.success ?? false,
+      data: response.data,
+      error: response.error,
+    };
+  },
+
+  /**
+   * Extract job data from the current page (via content script)
    */
   async extractJobData(): Promise<JobData | null> {
     const response = await sendToContentScript<JobData>("EXTRACT_JOB_DATA");
@@ -71,18 +115,36 @@ export const messages = {
   /**
    * Save a job application
    */
-  async saveApplication(jobData: JobData): Promise<MessageResponse<{ id: string }>> {
-    return sendToBackground("SAVE_APPLICATION", jobData);
+  async saveApplication(
+    data: ApplicationPayload
+  ): Promise<{ success: boolean; id?: string; queued?: boolean; error?: string }> {
+    const response = await sendToBackground<{ id?: string; queued?: boolean }>(
+      "SAVE_APPLICATION",
+      data
+    );
+    return {
+      success: response.success ?? false,
+      id: response.data?.id,
+      queued: response.data?.queued,
+      error: response.error,
+    };
   },
 
   /**
    * Check if a job is already tracked
    */
-  async checkDuplicate(url: string): Promise<{ exists: boolean; applicationId?: string }> {
+  async checkDuplicate(
+    url: string
+  ): Promise<{ success: boolean; exists?: boolean; applicationId?: string; error?: string }> {
     const response = await sendToBackground<{ exists: boolean; applicationId?: string }>(
       "CHECK_DUPLICATE",
       { url }
     );
-    return response.data ?? { exists: false };
+    return {
+      success: response.success ?? false,
+      exists: response.data?.exists,
+      applicationId: response.data?.applicationId,
+      error: response.error,
+    };
   },
 };
