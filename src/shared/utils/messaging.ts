@@ -2,13 +2,8 @@
  * Typed message passing between extension components
  */
 
-import type {
-  MessageType,
-  ExtensionMessage,
-  MessageResponse,
-  JobData,
-  AuthState,
-} from "@/shared/types";
+import browser from "webextension-polyfill";
+import type { MessageType, MessageResponse, JobData, AuthState } from "@/shared/types";
 
 /**
  * Send a message to the background script
@@ -17,18 +12,15 @@ export async function sendToBackground<T = unknown>(
   type: MessageType,
   payload?: unknown
 ): Promise<MessageResponse<T>> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type, payload }, (response) => {
-      if (chrome.runtime.lastError) {
-        resolve({
-          success: false,
-          error: chrome.runtime.lastError.message,
-        });
-      } else {
-        resolve(response as MessageResponse<T>);
-      }
-    });
-  });
+  try {
+    const response = await browser.runtime.sendMessage({ type, payload });
+    return response as MessageResponse<T>;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**
@@ -38,26 +30,22 @@ export async function sendToContentScript<T = unknown>(
   type: MessageType,
   payload?: unknown
 ): Promise<MessageResponse<T>> {
-  return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tabId = tabs[0]?.id;
-      if (!tabId) {
-        resolve({ success: false, error: "No active tab" });
-        return;
-      }
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tabId = tabs[0]?.id;
 
-      chrome.tabs.sendMessage(tabId, { type, payload }, (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({
-            success: false,
-            error: chrome.runtime.lastError.message,
-          });
-        } else {
-          resolve(response as MessageResponse<T>);
-        }
-      });
-    });
-  });
+    if (!tabId) {
+      return { success: false, error: "No active tab" };
+    }
+
+    const response = await browser.tabs.sendMessage(tabId, { type, payload });
+    return response as MessageResponse<T>;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**

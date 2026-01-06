@@ -1,9 +1,10 @@
 import { vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
-// Mock chrome API
-const chromeMock = {
+// Mock browser API (webextension-polyfill)
+const browserMock = {
   runtime: {
+    id: "test-extension-id",
     sendMessage: vi.fn(),
     onMessage: {
       addListener: vi.fn(),
@@ -12,7 +13,6 @@ const chromeMock = {
     onInstalled: {
       addListener: vi.fn(),
     },
-    lastError: null,
   },
   storage: {
     local: {
@@ -41,9 +41,35 @@ const chromeMock = {
   },
 };
 
-vi.stubGlobal("chrome", chromeMock);
+// Mock webextension-polyfill module
+vi.mock("webextension-polyfill", () => ({
+  default: browserMock,
+}));
+
+// Also mock chrome for any direct usage
+vi.stubGlobal("chrome", browserMock);
+
+// Mock crypto.subtle for encryption tests
+const cryptoMock = {
+  subtle: {
+    importKey: vi.fn().mockResolvedValue({}),
+    encrypt: vi.fn().mockResolvedValue(new ArrayBuffer(32)),
+    decrypt: vi.fn().mockResolvedValue(new TextEncoder().encode("decrypted")),
+  },
+  getRandomValues: vi.fn((arr: Uint8Array) => {
+    for (let i = 0; i < arr.length; i++) {
+      arr[i] = Math.floor(Math.random() * 256);
+    }
+    return arr;
+  }),
+};
+
+vi.stubGlobal("crypto", cryptoMock);
 
 // Reset mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
 });
+
+// Export for use in tests
+export { browserMock };

@@ -2,7 +2,7 @@
  * API client for AppTrack backend
  */
 
-import type { ApiError, MessageResponse } from "@/shared/types";
+import type { ApiError } from "@/shared/types";
 import { API_CONFIG } from "@/shared/constants";
 import { storage } from "./storage";
 
@@ -31,14 +31,14 @@ async function request<T>(
 
   const url = `${API_CONFIG.BASE_URL}${endpoint}`;
 
-  // Create abort controller for timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
   let lastError: Error | null = null;
   const attempts = retry ? API_CONFIG.RETRY_ATTEMPTS : 1;
 
   for (let attempt = 0; attempt < attempts; attempt++) {
+    // Create fresh AbortController for each attempt
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
       const response = await fetch(url, {
         ...fetchOptions,
@@ -59,6 +59,7 @@ async function request<T>(
 
       return (await response.json()) as T;
     } catch (error) {
+      clearTimeout(timeoutId);
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Don't retry on client errors (4xx) or abort
@@ -75,7 +76,7 @@ async function request<T>(
         throw new ApiClientError("Request timeout", "TIMEOUT");
       }
 
-      // Wait before retry
+      // Wait before retry with exponential backoff
       if (attempt < attempts - 1) {
         await sleep(API_CONFIG.RETRY_DELAY * Math.pow(2, attempt));
       }
@@ -115,11 +116,9 @@ export const api = {
    * Check if an application already exists
    */
   async checkDuplicate(url: string): Promise<{ exists: boolean; applicationId?: string }> {
-    return request(API_CONFIG.ENDPOINTS.CHECK_DUPLICATE, {
+    const params = new URLSearchParams({ url });
+    return request(`${API_CONFIG.ENDPOINTS.CHECK_DUPLICATE}?${params.toString()}`, {
       method: "GET",
-      headers: {
-        "X-Job-URL": encodeURIComponent(url),
-      },
     });
   },
 

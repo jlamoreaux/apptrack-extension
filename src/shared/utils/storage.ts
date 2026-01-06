@@ -1,54 +1,176 @@
 /**
- * Typed wrapper around chrome.storage.local
+ * Typed wrapper around chrome.storage.local with encryption for sensitive data
  */
 
+import browser from "webextension-polyfill";
 import type { AuthState } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/constants";
 
 type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
 /**
+ * Simple encryption for sensitive data using Web Crypto API
+ * Note: This provides obfuscation, not true security (key is derived from extension ID)
+ */
+const ENCRYPTION_PREFIX = "enc:";
+
+async function getEncryptionKey(): Promise<CryptoKey> {
+  // Use extension ID as basis for key (available to this extension only)
+  const extensionId = browser.runtime.id ?? "apptrack-extension";
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(extensionId.padEnd(32, "0").slice(0, 32)),
+    "AES-GCM",
+    false,
+    ["encrypt", "decrypt"]
+  );
+  return keyMaterial;
+}
+
+async function encrypt(data: string): Promise<string> {
+  try {
+    const key = await getEncryptionKey();
+    const encoder = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encoder.encode(data)
+    );
+    // Combine IV and encrypted data
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return ENCRYPTION_PREFIX + btoa(String.fromCharCode(...combined));
+  } catch (error) {
+    console.error("[AppTrack] Encryption failed:", error);
+    // Fall back to unencrypted if crypto fails
+    return data;
+  }
+}
+
+async function decrypt(data: string): Promise<string> {
+  if (!data.startsWith(ENCRYPTION_PREFIX)) {
+    return data; // Not encrypted
+  }
+
+  try {
+    const key = await getEncryptionKey();
+    const combined = Uint8Array.from(atob(data.slice(ENCRYPTION_PREFIX.length)), (c) =>
+      c.charCodeAt(0)
+    );
+    const iv = combined.slice(0, 12);
+    const encrypted = combined.slice(12);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encrypted
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    console.error("[AppTrack] Decryption failed:", error);
+    return ""; // Return empty on decryption failure
+  }
+}
+
+/**
  * Get a value from storage
  */
 export async function get<T>(key: StorageKey): Promise<T | null> {
-  const result = await chrome.storage.local.get(key);
-  return (result[key] as T) ?? null;
+  try {
+    const result = await browser.storage.local.get(key);
+    return (result[key] as T) ?? null;
+  } catch (error) {
+    console.error("[AppTrack] Storage get error:", error);
+    return null;
+  }
 }
 
 /**
  * Set a value in storage
  */
 export async function set<T>(key: StorageKey, value: T): Promise<void> {
-  await chrome.storage.local.set({ [key]: value });
+  try {
+    await browser.storage.local.set({ [key]: value });
+  } catch (error) {
+    console.error("[AppTrack] Storage set error:", error);
+  }
 }
 
 /**
  * Remove a value from storage
  */
 export async function remove(key: StorageKey): Promise<void> {
-  await chrome.storage.local.remove(key);
+  try {
+    await browser.storage.local.remove(key);
+  } catch (error) {
+    console.error("[AppTrack] Storage remove error:", error);
+  }
 }
 
 /**
  * Clear all extension storage
  */
 export async function clear(): Promise<void> {
-  await chrome.storage.local.clear();
+  try {
+    await browser.storage.local.clear();
+  } catch (error) {
+    console.error("[AppTrack] Storage clear error:", error);
+  }
 }
 
 /**
- * Get the current auth state
+ * Get the current auth state (with decryption of tokens)
  */
 export async function getAuthState(): Promise<AuthState> {
-  const state = await get<AuthState>(STORAGE_KEYS.AUTH_STATE);
-  return state ?? { isAuthenticated: false };
+  const state = await get<AuthState & { encryptedToken?: string; encryptedRefreshToken?: string }>(
+    STORAGE_KEYS.AUTH_STATE
+  );
+
+  if (!state) {
+    return { isAuthenticated: false };
+  }
+
+  // Decrypt tokens if they exist
+  let token = state.token;
+  let refreshToken = state.refreshToken;
+
+  if (state.encryptedToken) {
+    token = await decrypt(state.encryptedToken);
+  }
+  if (state.encryptedRefreshToken) {
+    refreshToken = await decrypt(state.encryptedRefreshToken);
+  }
+
+  return {
+    isAuthenticated: state.isAuthenticated,
+    token,
+    refreshToken,
+    expiresAt: state.expiresAt,
+    userId: state.userId,
+  };
 }
 
 /**
- * Set the auth state
+ * Set the auth state (with encryption of tokens)
  */
 export async function setAuthState(state: AuthState): Promise<void> {
-  await set(STORAGE_KEYS.AUTH_STATE, state);
+  // Encrypt sensitive tokens before storage
+  const encryptedState: Record<string, unknown> = {
+    isAuthenticated: state.isAuthenticated,
+    expiresAt: state.expiresAt,
+    userId: state.userId,
+  };
+
+  if (state.token) {
+    encryptedState.encryptedToken = await encrypt(state.token);
+  }
+  if (state.refreshToken) {
+    encryptedState.encryptedRefreshToken = await encrypt(state.refreshToken);
+  }
+
+  await set(STORAGE_KEYS.AUTH_STATE, encryptedState);
 }
 
 /**

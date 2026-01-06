@@ -11,13 +11,6 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
-  build: {
-    rollupOptions: {
-      input: {
-        popup: resolve(__dirname, "src/popup/index.html"),
-      },
-    },
-  },
   server: {
     port: 5173,
     strictPort: true,
