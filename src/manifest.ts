@@ -33,9 +33,13 @@ export default defineManifest({
   ],
   permissions: ["storage", "activeTab", "alarms"],
   host_permissions: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
+  // Allow apptrack.ing to send messages directly to the extension for auth
+  externally_connectable: {
+    matches: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
+  },
   web_accessible_resources: [
     {
-      resources: ["icons/*"],
+      resources: ["icons/*", "src/auth/callback.html"],
       matches: ["<all_urls>"],
     },
   ],

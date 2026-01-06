@@ -10,6 +10,10 @@ const browserMock = {
       addListener: vi.fn(),
       removeListener: vi.fn(),
     },
+    onMessageExternal: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
     onInstalled: {
       addListener: vi.fn(),
     },
@@ -23,6 +27,10 @@ const browserMock = {
       set: vi.fn(),
       remove: vi.fn(),
       clear: vi.fn(),
+    },
+    onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
     },
   },
   tabs: {

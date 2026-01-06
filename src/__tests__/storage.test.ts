@@ -6,9 +6,9 @@ import { browserMock } from "./setup";
 describe("storage", () => {
   beforeEach(() => {
     vi.mocked(browserMock.storage.local.get).mockResolvedValue({});
-    vi.mocked(browserMock.storage.local.set).mockResolvedValue();
-    vi.mocked(browserMock.storage.local.remove).mockResolvedValue();
-    vi.mocked(browserMock.storage.local.clear).mockResolvedValue();
+    vi.mocked(browserMock.storage.local.set).mockResolvedValue(undefined);
+    vi.mocked(browserMock.storage.local.remove).mockResolvedValue(undefined);
+    vi.mocked(browserMock.storage.local.clear).mockResolvedValue(undefined);
   });
 
   describe("get", () => {

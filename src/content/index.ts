@@ -8,8 +8,13 @@ import type { JobData } from "@/shared/types";
 
 // Message handler for background script communication
 browser.runtime.onMessage.addListener(
-  (message: { type: string }): Promise<unknown> | undefined => {
-    switch (message.type) {
+  (message: unknown): Promise<unknown> | undefined => {
+    const msg = message as { type: string };
+    if (!msg || typeof msg.type !== "string") {
+      return undefined;
+    }
+
+    switch (msg.type) {
       case "EXTRACT_JOB_DATA":
         return Promise.resolve({
           success: true,

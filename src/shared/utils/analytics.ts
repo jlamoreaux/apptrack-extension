@@ -6,11 +6,6 @@
 import { ANALYTICS_CONFIG, STORAGE_KEYS } from "@/shared/constants";
 import { storage } from "./storage";
 
-interface AnalyticsEvent {
-  event: string;
-  properties?: Record<string, unknown>;
-}
-
 let isOptedOut = false;
 let isInitialized = false;
 

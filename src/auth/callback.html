@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AppTrack - Signing In</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .container {
+        background: white;
+        padding: 2.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+      }
+      .logo {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1.5rem;
+        background: #3b82f6;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .logo svg {
+        width: 36px;
+        height: 36px;
+      }
+      h1 {
+        color: #1f2937;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .status {
+        color: #6b7280;
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1.5rem;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .success {
+        color: #059669;
+      }
+      .success-icon {
+        width: 48px;
+        height: 48px;
+        background: #d1fae5;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+      }
+      .success-icon svg {
+        width: 24px;
+        height: 24px;
+        color: #059669;
+      }
+      .error {
+        color: #dc2626;
+      }
+      .error-icon {
+        width: 48px;
+        height: 48px;
+        background: #fee2e2;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+      }
+      .error-icon svg {
+        width: 24px;
+        height: 24px;
+        color: #dc2626;
+      }
+      .error-message {
+        background: #fef2f2;
+        color: #991b1b;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+      }
+      .btn {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: #3b82f6;
+        color: white;
+        text-decoration: none;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: background 0.2s;
+      }
+      .btn:hover {
+        background: #2563eb;
+      }
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      .btn-secondary:hover {
+        background: #e5e7eb;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 24h20M24 14v20" stroke="white" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading">
+        <h1>Signing you in...</h1>
+        <p class="status">Please wait while we complete your sign-in</p>
+        <div class="spinner"></div>
+      </div>
+
+      <!-- Success State -->
+      <div id="success" class="hidden">
+        <div class="success-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <h1 class="success">You're signed in!</h1>
+        <p class="status">You can now use the AppTrack extension to save job applications.</p>
+        <p class="status" style="font-size: 0.875rem; margin-top: 1rem;">This window will close automatically...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error" class="hidden">
+        <div class="error-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+        <h1 class="error">Sign in failed</h1>
+        <p id="error-message" class="error-message"></p>
+        <a href="https://apptrack.ing/auth/extension" class="btn">Try Again</a>
+      </div>
+    </div>
+
+    <script type="module" src="./callback.ts"></script>
+  </body>
+</html>

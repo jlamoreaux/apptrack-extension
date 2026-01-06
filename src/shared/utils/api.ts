@@ -109,9 +109,31 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Auth token response structure
+ */
+interface AuthTokenResponse {
+  token: string;
+  refreshToken?: string;
+  expiresAt: number;
+  userId: string;
+}
+
+/**
  * API client methods
  */
 export const api = {
+  /**
+   * Exchange authorization code for tokens
+   * Used in OAuth code flow when extension receives an auth code
+   */
+  async exchangeAuthCode(authCode: string): Promise<AuthTokenResponse> {
+    return request(API_CONFIG.ENDPOINTS.AUTH_TOKEN, {
+      method: "POST",
+      body: JSON.stringify({ code: authCode }),
+      retry: false,
+    });
+  },
+
   /**
    * Check if an application already exists
    */
@@ -146,6 +168,17 @@ export const api = {
     return request(API_CONFIG.ENDPOINTS.REFRESH_TOKEN, {
       method: "POST",
       body: JSON.stringify({ refreshToken }),
+      retry: false,
+    });
+  },
+
+  /**
+   * Validate the current auth token
+   * Returns user info if valid, throws if invalid
+   */
+  async validateToken(): Promise<{ userId: string; email?: string }> {
+    return request("/auth/validate", {
+      method: "GET",
       retry: false,
     });
   },

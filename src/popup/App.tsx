@@ -98,67 +98,88 @@ function AppContent() {
     wasQueued: false,
   });
 
-  // Initialize - check auth and fetch job data
-  useEffect(() => {
-    async function initialize() {
-      try {
-        // Check auth state
-        const authState = await messages.getAuthState();
+  // Initialize function - check auth and fetch job data
+  const initialize = useCallback(async () => {
+    try {
+      setState((s) => ({ ...s, loading: true }));
 
-        if (!authState.isAuthenticated) {
-          setState((s) => ({ ...s, view: "logged_out", loading: false }));
-          return;
-        }
+      // Check auth state
+      const authState = await messages.getAuthState();
 
-        // Fetch job data from current tab
-        const jobResult = await messages.getJobData();
+      if (!authState.isAuthenticated) {
+        setState((s) => ({ ...s, view: "logged_out", loading: false }));
+        return;
+      }
 
-        if (!jobResult.success || !jobResult.data) {
-          setState((s) => ({ ...s, view: "no_job", loading: false }));
-          return;
-        }
+      // Fetch job data from current tab
+      const jobResult = await messages.getJobData();
 
-        const jobData = jobResult.data;
-        const hasJob = !!(jobData.title || jobData.company);
+      if (!jobResult.success || !jobResult.data) {
+        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        return;
+      }
 
-        if (!hasJob) {
-          setState((s) => ({ ...s, view: "no_job", loading: false }));
-          return;
-        }
+      const jobData = jobResult.data;
+      const hasJob = !!(jobData.title || jobData.company);
 
-        // Check if already tracked
-        const duplicateResult = await messages.checkDuplicate(jobData.url);
+      if (!hasJob) {
+        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        return;
+      }
 
-        if (duplicateResult.success && duplicateResult.exists) {
-          setState((s) => ({
-            ...s,
-            view: "already_tracked",
-            jobData,
-            loading: false,
-          }));
-          return;
-        }
+      // Check if already tracked
+      const duplicateResult = await messages.checkDuplicate(jobData.url);
 
-        // Job detected and not tracked
+      if (duplicateResult.success && duplicateResult.exists) {
         setState((s) => ({
           ...s,
-          view: "job_detected",
+          view: "already_tracked",
           jobData,
           loading: false,
         }));
-      } catch (error) {
-        console.error("[AppTrack] Initialization error:", error);
-        setState((s) => ({
-          ...s,
-          view: "error",
-          error: error instanceof Error ? error.message : "Failed to initialize",
-          loading: false,
-        }));
+        return;
       }
-    }
 
-    initialize();
+      // Job detected and not tracked
+      setState((s) => ({
+        ...s,
+        view: "job_detected",
+        jobData,
+        loading: false,
+      }));
+    } catch (error) {
+      console.error("[AppTrack] Initialization error:", error);
+      setState((s) => ({
+        ...s,
+        view: "error",
+        error: error instanceof Error ? error.message : "Failed to initialize",
+        loading: false,
+      }));
+    }
   }, []);
+
+  // Initialize on mount
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  // Listen for auth state changes (e.g., after user signs in from web app)
+  useEffect(() => {
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName === "local" && changes.apptrack_auth_state) {
+        // Auth state changed, re-initialize
+        initialize();
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, [initialize]);
 
   // Handle logout
   const handleLogout = useCallback(async () => {

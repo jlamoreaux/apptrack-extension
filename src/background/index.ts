@@ -243,12 +243,12 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   // Try to extract job data from the page
   try {
-    const response = await browser.tabs.sendMessage(tabId, {
+    const response = (await browser.tabs.sendMessage(tabId, {
       type: "EXTRACT_JOB_DATA",
-    });
+    })) as { success?: boolean; data?: JobData } | undefined;
 
     if (response?.success && response.data) {
-      const jobData = response.data as JobData;
+      const jobData = response.data;
       const hasJob = !!(jobData.title || jobData.company);
 
       if (hasJob) {
@@ -352,18 +352,26 @@ async function processPendingSaves(): Promise<void> {
  * Message handler for popup and content script communication
  */
 browser.runtime.onMessage.addListener(
-  (message: { type: string; payload?: unknown }, sender): Promise<unknown> | undefined => {
-    switch (message.type) {
+  (
+    message: unknown,
+    sender: browser.Runtime.MessageSender
+  ): Promise<unknown> | undefined => {
+    const msg = message as { type: string; payload?: unknown };
+    if (!msg || typeof msg.type !== "string") {
+      return undefined;
+    }
+
+    switch (msg.type) {
       case "GET_AUTH_STATE":
         return handleGetAuthState();
       case "GET_JOB_DATA":
         return handleGetJobData(sender.tab?.id);
       case "SAVE_APPLICATION":
-        return handleSaveApplication(message.payload, sender.tab?.id);
+        return handleSaveApplication(msg.payload, sender.tab?.id);
       case "CHECK_DUPLICATE":
-        return handleCheckDuplicate(message.payload);
+        return handleCheckDuplicate(msg.payload);
       case "SET_AUTH_STATE":
-        return handleSetAuthState(message.payload);
+        return handleSetAuthState(msg.payload);
       case "LOGOUT":
         return handleLogoutMessage();
       case "REFRESH_TOKEN":
@@ -468,12 +476,12 @@ async function handleGetJobData(
     }
 
     // Fetch fresh data
-    const response = await browser.tabs.sendMessage(targetTabId, {
+    const response = (await browser.tabs.sendMessage(targetTabId, {
       type: "EXTRACT_JOB_DATA",
-    });
+    })) as { success?: boolean; data?: JobData } | undefined;
 
     if (response?.success && response.data) {
-      return { success: true, data: response.data as JobData };
+      return { success: true, data: response.data };
     }
 
     return { success: false, error: "No job data found" };
@@ -574,6 +582,91 @@ if (typeof navigator !== "undefined" && "onLine" in navigator) {
     console.warn("[AppTrack] Back online, processing pending saves");
     processPendingSaves().catch(console.error);
   });
+}
+
+// ============================================================================
+// External Message Handler (from apptrack.ing web app)
+// ============================================================================
+
+/**
+ * Handle messages from apptrack.ing for OAuth authentication
+ * This allows the web app to send auth tokens directly to the extension
+ */
+browser.runtime.onMessageExternal.addListener(
+  (
+    message: unknown,
+    sender: browser.Runtime.MessageSender
+  ): Promise<{ success: boolean; error?: string }> | undefined => {
+    const msg = message as { type: string; payload?: unknown };
+
+    // Verify sender is from apptrack.ing
+    const senderUrl = sender.url ?? "";
+    const isValidSender =
+      senderUrl.startsWith("https://apptrack.ing/") ||
+      senderUrl.startsWith("https://www.apptrack.ing/");
+
+    if (!isValidSender) {
+      console.warn("[AppTrack] Rejected external message from:", senderUrl);
+      return Promise.resolve({ success: false, error: "Unauthorized sender" });
+    }
+
+    if (!msg || typeof msg.type !== "string") {
+      return Promise.resolve({ success: false, error: "Invalid message format" });
+    }
+
+    switch (msg.type) {
+      case "AUTH_CALLBACK":
+        return handleAuthCallback(msg.payload);
+      case "PING":
+        // Allow web app to check if extension is installed
+        return Promise.resolve({ success: true });
+      default:
+        return Promise.resolve({ success: false, error: "Unknown message type" });
+    }
+  }
+);
+
+/**
+ * Handle OAuth callback from apptrack.ing
+ * Receives tokens after successful authentication
+ */
+async function handleAuthCallback(
+  payload: unknown
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const authData = payload as {
+      token: string;
+      refreshToken?: string;
+      expiresAt: number;
+      userId: string;
+    };
+
+    // Validate required fields
+    if (!authData.token || !authData.expiresAt || !authData.userId) {
+      return { success: false, error: "Missing required auth data" };
+    }
+
+    // Store auth state
+    await storage.setAuthState({
+      isAuthenticated: true,
+      token: authData.token,
+      refreshToken: authData.refreshToken,
+      expiresAt: authData.expiresAt,
+      userId: authData.userId,
+    });
+
+    // Setup token refresh alarm
+    await setupTokenRefreshAlarm();
+
+    // Update icon to authenticated state
+    await updateIconState(ICON_STATES.AUTHENTICATED);
+
+    console.warn("[AppTrack] Auth callback successful for user:", authData.userId);
+    return { success: true };
+  } catch (error) {
+    console.error("[AppTrack] Auth callback error:", error);
+    return { success: false, error: String(error) };
+  }
 }
 
 export {};
