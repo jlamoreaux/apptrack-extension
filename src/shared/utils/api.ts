@@ -177,7 +177,7 @@ export const api = {
    * Returns user info if valid, throws if invalid
    */
   async validateToken(): Promise<{ userId: string; email?: string }> {
-    return request("/auth/validate", {
+    return request(API_CONFIG.ENDPOINTS.VALIDATE_TOKEN, {
       method: "GET",
       retry: false,
     });

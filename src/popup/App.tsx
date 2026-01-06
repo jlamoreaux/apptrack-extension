@@ -3,9 +3,10 @@
  * Main application component with state management and job form
  */
 
-import { useState, useEffect, useCallback, Component, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from "react";
 import type { ExtensionState, JobData, ApplicationPayload } from "@/shared/types";
 import { messages } from "@/shared/utils/messaging";
+import { STORAGE_KEYS } from "@/shared/constants";
 import {
   Button,
   Input,
@@ -98,8 +99,17 @@ function AppContent() {
     wasQueued: false,
   });
 
+  // Guard to prevent concurrent initialization calls
+  const isInitializing = useRef(false);
+
   // Initialize function - check auth and fetch job data
   const initialize = useCallback(async () => {
+    // Prevent race condition from concurrent calls
+    if (isInitializing.current) {
+      return;
+    }
+    isInitializing.current = true;
+
     try {
       setState((s) => ({ ...s, loading: true }));
 
@@ -155,6 +165,8 @@ function AppContent() {
         error: error instanceof Error ? error.message : "Failed to initialize",
         loading: false,
       }));
+    } finally {
+      isInitializing.current = false;
     }
   }, []);
 
@@ -169,7 +181,7 @@ function AppContent() {
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string
     ) => {
-      if (areaName === "local" && changes.apptrack_auth_state) {
+      if (areaName === "local" && changes[STORAGE_KEYS.AUTH_STATE]) {
         // Auth state changed, re-initialize
         initialize();
       }

@@ -31,6 +31,19 @@ interface ErrorParams {
 type AuthParams = DirectAuthParams | CodeAuthParams | ErrorParams | null;
 
 /**
+ * Clear sensitive URL parameters from browser history
+ * This prevents tokens from being visible in history/URL bar
+ */
+function clearSensitiveUrlParams(): void {
+  try {
+    // Replace current history entry with clean URL (no query params)
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } catch {
+    // Ignore errors - some contexts may not allow history manipulation
+  }
+}
+
+/**
  * Parse URL parameters from the callback
  */
 function getAuthParams(): AuthParams {
@@ -39,12 +52,16 @@ function getAuthParams(): AuthParams {
   // Check for error first
   const error = params.get("error");
   if (error) {
+    // Clear params even for errors (may contain sensitive state)
+    clearSensitiveUrlParams();
     return { type: "error", error };
   }
 
   // Check for authorization code flow
   const code = params.get("code");
   if (code) {
+    // Clear the auth code from URL immediately after reading
+    clearSensitiveUrlParams();
     return { type: "code", code };
   }
 
@@ -54,13 +71,18 @@ function getAuthParams(): AuthParams {
   const userId = params.get("userId");
 
   if (token && expiresAt && userId) {
-    return {
+    const result: DirectAuthParams = {
       type: "direct",
       token,
       refreshToken: params.get("refreshToken") ?? undefined,
       expiresAt,
       userId,
     };
+
+    // SECURITY: Clear sensitive tokens from URL immediately after reading
+    clearSensitiveUrlParams();
+
+    return result;
   }
 
   return null;
@@ -161,6 +183,8 @@ async function handleCallback(): Promise<void> {
     // Close window after a short delay
     setTimeout(() => {
       window.close();
+      // If window.close() fails (e.g., window wasn't opened by script),
+      // the user will see the success message with instructions
     }, 2000);
   } catch (error) {
     console.error("[AppTrack] Auth callback error:", error);

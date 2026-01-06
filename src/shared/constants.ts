@@ -10,6 +10,7 @@ export const API_CONFIG = {
   ENDPOINTS: {
     AUTH_TOKEN: "/auth/extension-token",
     REFRESH_TOKEN: "/auth/refresh-extension-token",
+    VALIDATE_TOKEN: "/auth/validate",
     CHECK_DUPLICATE: "/applications/check-duplicate",
     APPLICATIONS: "/applications",
   },

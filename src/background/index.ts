@@ -36,6 +36,81 @@ interface TabState {
 const tabStates = new Map<number, TabState>();
 
 // ============================================================================
+// Auth Data Validation & Storage
+// ============================================================================
+
+interface AuthPayload {
+  token: string;
+  refreshToken?: string;
+  expiresAt: number;
+  userId: string;
+}
+
+/**
+ * Validate auth payload has required fields with correct types
+ */
+function validateAuthPayload(payload: unknown): { valid: true; data: AuthPayload } | { valid: false; error: string } {
+  if (!payload || typeof payload !== "object") {
+    return { valid: false, error: "Invalid payload format" };
+  }
+
+  const data = payload as Record<string, unknown>;
+
+  if (typeof data.token !== "string" || data.token.length === 0) {
+    return { valid: false, error: "Invalid or missing token" };
+  }
+
+  if (typeof data.expiresAt !== "number" || data.expiresAt <= Date.now()) {
+    return { valid: false, error: "Invalid or expired expiresAt timestamp" };
+  }
+
+  if (typeof data.userId !== "string" || data.userId.length === 0) {
+    return { valid: false, error: "Invalid or missing userId" };
+  }
+
+  if (data.refreshToken !== undefined && typeof data.refreshToken !== "string") {
+    return { valid: false, error: "Invalid refreshToken format" };
+  }
+
+  return {
+    valid: true,
+    data: {
+      token: data.token,
+      refreshToken: data.refreshToken as string | undefined,
+      expiresAt: data.expiresAt,
+      userId: data.userId,
+    },
+  };
+}
+
+/**
+ * Store validated auth data and setup refresh
+ */
+async function storeAuthAndSetup(authData: AuthPayload): Promise<void> {
+  await storage.setAuthState({
+    isAuthenticated: true,
+    token: authData.token,
+    refreshToken: authData.refreshToken,
+    expiresAt: authData.expiresAt,
+    userId: authData.userId,
+  });
+
+  await setupTokenRefreshAlarm();
+  await updateIconState(ICON_STATES.AUTHENTICATED);
+}
+
+/**
+ * Check if sender is from an extension page (popup or callback)
+ */
+function isExtensionPage(sender: browser.Runtime.MessageSender): boolean {
+  const senderUrl = sender.url ?? "";
+  const extensionOrigin = `chrome-extension://${browser.runtime.id}`;
+  const mozExtensionOrigin = `moz-extension://${browser.runtime.id}`;
+
+  return senderUrl.startsWith(extensionOrigin) || senderUrl.startsWith(mozExtensionOrigin);
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -371,6 +446,12 @@ browser.runtime.onMessage.addListener(
       case "CHECK_DUPLICATE":
         return handleCheckDuplicate(msg.payload);
       case "SET_AUTH_STATE":
+        // SECURITY: Only allow SET_AUTH_STATE from extension pages (popup/callback)
+        // This prevents malicious content scripts from injecting arbitrary tokens
+        if (!isExtensionPage(sender)) {
+          console.error("[AppTrack] Rejected SET_AUTH_STATE from non-extension page:", sender.url);
+          return Promise.resolve({ success: false, error: "Unauthorized" });
+        }
         return handleSetAuthState(msg.payload);
       case "LOGOUT":
         return handleLogoutMessage();
@@ -410,24 +491,13 @@ async function handleSetAuthState(
   payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const authData = payload as {
-      token: string;
-      refreshToken?: string;
-      expiresAt: number;
-      userId: string;
-    };
+    // Validate payload structure and types
+    const validation = validateAuthPayload(payload);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
 
-    await storage.setAuthState({
-      isAuthenticated: true,
-      token: authData.token,
-      refreshToken: authData.refreshToken,
-      expiresAt: authData.expiresAt,
-      userId: authData.userId,
-    });
-
-    await setupTokenRefreshAlarm();
-    await updateIconState(ICON_STATES.AUTHENTICATED);
-
+    await storeAuthAndSetup(validation.data);
     return { success: true };
   } catch (error) {
     console.error("[AppTrack] Error setting auth state:", error);
@@ -634,34 +704,13 @@ async function handleAuthCallback(
   payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const authData = payload as {
-      token: string;
-      refreshToken?: string;
-      expiresAt: number;
-      userId: string;
-    };
-
-    // Validate required fields
-    if (!authData.token || !authData.expiresAt || !authData.userId) {
-      return { success: false, error: "Missing required auth data" };
+    // Validate payload structure and types
+    const validation = validateAuthPayload(payload);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
     }
 
-    // Store auth state
-    await storage.setAuthState({
-      isAuthenticated: true,
-      token: authData.token,
-      refreshToken: authData.refreshToken,
-      expiresAt: authData.expiresAt,
-      userId: authData.userId,
-    });
-
-    // Setup token refresh alarm
-    await setupTokenRefreshAlarm();
-
-    // Update icon to authenticated state
-    await updateIconState(ICON_STATES.AUTHENTICATED);
-
-    console.warn("[AppTrack] Auth callback successful for user:", authData.userId);
+    await storeAuthAndSetup(validation.data);
     return { success: true };
   } catch (error) {
     console.error("[AppTrack] Auth callback error:", error);

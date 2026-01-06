@@ -39,8 +39,15 @@ export default defineManifest({
   },
   web_accessible_resources: [
     {
-      resources: ["icons/*", "src/auth/callback.html"],
+      // Icons can be accessed from any page (for display purposes)
+      resources: ["icons/*"],
       matches: ["<all_urls>"],
+    },
+    {
+      // Auth callback page should only be accessible from apptrack.ing
+      // This prevents arbitrary websites from opening/iframing the callback
+      resources: ["src/auth/callback.html"],
+      matches: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
     },
   ],
 });
