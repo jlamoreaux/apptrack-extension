@@ -294,7 +294,7 @@ function AppContent() {
 
 function LoggedOutView() {
   const handleLogin = () => {
-    chrome.tabs.create({ url: "https://apptrack.ing/auth/extension" });
+    chrome.tabs.create({ url: "https://apptrack.ing/auth/extension-callback" });
   };
 
   return (
