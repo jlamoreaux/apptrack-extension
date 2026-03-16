@@ -721,32 +721,14 @@ browser.runtime.onMessageExternal.addListener(
 
 /**
  * Handle OAuth callback from apptrack.ing.
- * Receives { token, expiresAt: ISO string, user: { id, email, name } } from web app.
+ * The web app's extension-callback page flattens the token response before sending:
+ * { token, expiresAt: ISO string, userId, email }
  */
 async function handleAuthCallback(
   payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!payload || typeof payload !== "object") {
-      return { success: false, error: "Invalid payload" };
-    }
-
-    const data = payload as Record<string, unknown>;
-
-    // Extract userId from user object if present (web app sends user: { id, email, name })
-    let userId = data.userId as string | undefined;
-    if (!userId && data.user && typeof data.user === "object") {
-      userId = (data.user as Record<string, unknown>).id as string | undefined;
-    }
-
-    // Rebuild payload with extracted userId for validation
-    const normalizedPayload = {
-      token: data.token,
-      expiresAt: data.expiresAt,
-      userId,
-    };
-
-    const validation = validateAuthPayload(normalizedPayload);
+    const validation = validateAuthPayload(payload);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
