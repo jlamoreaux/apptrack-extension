@@ -1,26 +1,16 @@
 /**
  * Auth Callback Handler
- * Processes OAuth callback from apptrack.ing and stores auth tokens
- *
- * Supports two flows:
- * 1. Direct tokens: token, refreshToken, expiresAt, userId in URL params
- * 2. Authorization code: code in URL params (exchanged via API)
+ * Fallback page that processes auth tokens from URL params.
+ * Primary auth flow uses chrome.runtime.sendMessage from the web app directly.
  */
 
 import browser from "webextension-polyfill";
-import { api } from "@/shared/utils/api";
 
 interface DirectAuthParams {
   type: "direct";
   token: string;
-  refreshToken?: string;
   expiresAt: string;
   userId: string;
-}
-
-interface CodeAuthParams {
-  type: "code";
-  code: string;
 }
 
 interface ErrorParams {
@@ -28,15 +18,13 @@ interface ErrorParams {
   error: string;
 }
 
-type AuthParams = DirectAuthParams | CodeAuthParams | ErrorParams | null;
+type AuthParams = DirectAuthParams | ErrorParams | null;
 
 /**
  * Clear sensitive URL parameters from browser history
- * This prevents tokens from being visible in history/URL bar
  */
 function clearSensitiveUrlParams(): void {
   try {
-    // Replace current history entry with clean URL (no query params)
     window.history.replaceState({}, document.title, window.location.pathname);
   } catch {
     // Ignore errors - some contexts may not allow history manipulation
@@ -52,17 +40,8 @@ function getAuthParams(): AuthParams {
   // Check for error first
   const error = params.get("error");
   if (error) {
-    // Clear params even for errors (may contain sensitive state)
     clearSensitiveUrlParams();
     return { type: "error", error };
-  }
-
-  // Check for authorization code flow
-  const code = params.get("code");
-  if (code) {
-    // Clear the auth code from URL immediately after reading
-    clearSensitiveUrlParams();
-    return { type: "code", code };
   }
 
   // Check for direct token flow
@@ -74,7 +53,6 @@ function getAuthParams(): AuthParams {
     const result: DirectAuthParams = {
       type: "direct",
       token,
-      refreshToken: params.get("refreshToken") ?? undefined,
       expiresAt,
       userId,
     };
@@ -125,51 +103,34 @@ async function handleCallback(): Promise<void> {
 
   const authParams = getAuthParams();
 
-  // Check for missing params
   if (!authParams) {
     showState("error", "Invalid callback parameters. Please try signing in again.");
     return;
   }
 
-  // Check for error from server
   if (authParams.type === "error") {
     showState("error", decodeURIComponent(authParams.error));
     return;
   }
 
   try {
-    let token: string;
-    let refreshToken: string | undefined;
-    let expiresAt: number;
-    let userId: string;
-
-    if (authParams.type === "code") {
-      // Authorization code flow - exchange code for tokens
-      const tokenResponse = await api.exchangeAuthCode(authParams.code);
-      token = tokenResponse.token;
-      refreshToken = tokenResponse.refreshToken;
-      expiresAt = tokenResponse.expiresAt;
-      userId = tokenResponse.userId;
+    // Parse expiresAt — accept both ISO string and numeric timestamp.
+    // Background's validateAuthPayload handles full validation (NaN, expiry).
+    let expiresAt: number | string;
+    const parsed = Number(authParams.expiresAt);
+    if (!isNaN(parsed) && parsed > 0) {
+      expiresAt = parsed;
     } else {
-      // Direct token flow - parse from URL params
-      token = authParams.token;
-      refreshToken = authParams.refreshToken;
-      expiresAt = parseInt(authParams.expiresAt, 10);
-      userId = authParams.userId;
-
-      if (isNaN(expiresAt)) {
-        throw new Error("Invalid expiry time");
-      }
+      expiresAt = authParams.expiresAt;
     }
 
-    // Send auth data to background worker
+    // Send auth data to background worker (background validates expiresAt)
     const response = (await browser.runtime.sendMessage({
       type: "SET_AUTH_STATE",
       payload: {
-        token,
-        refreshToken,
+        token: authParams.token,
         expiresAt,
-        userId,
+        userId: authParams.userId,
       },
     })) as { success?: boolean; error?: string } | undefined;
 
@@ -177,14 +138,10 @@ async function handleCallback(): Promise<void> {
       throw new Error(response?.error ?? "Failed to save authentication");
     }
 
-    // Show success state
     showState("success");
 
-    // Close window after a short delay
     setTimeout(() => {
       window.close();
-      // If window.close() fails (e.g., window wasn't opened by script),
-      // the user will see the success message with instructions
     }, 2000);
   } catch (error) {
     console.error("[AppTrack] Auth callback error:", error);
@@ -195,5 +152,21 @@ async function handleCallback(): Promise<void> {
   }
 }
 
+/**
+ * Update "Try Again" link with extension ID
+ */
+function updateTryAgainLink(): void {
+  const tryAgainLink = document.querySelector('a.btn[href*="extension-callback"]');
+  if (tryAgainLink) {
+    const extensionId = browser.runtime.id;
+    const url = new URL("https://apptrack.ing/auth/extension-callback");
+    url.searchParams.set("extensionId", extensionId);
+    tryAgainLink.setAttribute("href", url.toString());
+  }
+}
+
 // Run on page load
-document.addEventListener("DOMContentLoaded", handleCallback);
+document.addEventListener("DOMContentLoaded", () => {
+  updateTryAgainLink();
+  handleCallback();
+});

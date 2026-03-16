@@ -65,7 +65,6 @@ export const messages = {
    */
   async setAuthState(authData: {
     token: string;
-    refreshToken?: string;
     expiresAt: number;
     userId: string;
   }): Promise<{ success: boolean; error?: string }> {
@@ -131,14 +130,15 @@ export const messages = {
   },
 
   /**
-   * Check if a job is already tracked
+   * Check if a job is already tracked by company and role
    */
   async checkDuplicate(
-    url: string
+    company: string,
+    role: string
   ): Promise<{ success: boolean; exists?: boolean; applicationId?: string; error?: string }> {
     const response = await sendToBackground<{ exists: boolean; applicationId?: string }>(
       "CHECK_DUPLICATE",
-      { url }
+      { company, role }
     );
     return {
       success: response.success ?? false,

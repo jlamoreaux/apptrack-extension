@@ -138,7 +138,10 @@ function AppContent() {
       }
 
       // Check if already tracked
-      const duplicateResult = await messages.checkDuplicate(jobData.url);
+      const duplicateResult = await messages.checkDuplicate(
+        jobData.company ?? "",
+        jobData.title ?? ""
+      );
 
       if (duplicateResult.success && duplicateResult.exists) {
         setState((s) => ({
@@ -294,7 +297,11 @@ function AppContent() {
 
 function LoggedOutView() {
   const handleLogin = () => {
-    chrome.tabs.create({ url: "https://apptrack.ing/auth/extension-callback" });
+    // Get the extension ID and pass it to the callback page
+    const extensionId = chrome.runtime.id;
+    const callbackUrl = new URL("https://apptrack.ing/auth/extension-callback");
+    callbackUrl.searchParams.set("extensionId", extensionId);
+    chrome.tabs.create({ url: callbackUrl.toString() });
   };
 
   return (

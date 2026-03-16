@@ -22,7 +22,6 @@ export interface JobData {
 export interface AuthState {
   isAuthenticated: boolean;
   token?: string;
-  refreshToken?: string;
   expiresAt?: number;
   userId?: string;
 }
@@ -78,7 +77,6 @@ export interface ApplicationPayload {
   description?: string;
   location?: string;
   salary?: string;
-  status?: "saved" | "applied" | "interviewing" | "offered" | "rejected";
   notes?: string;
 }
 
