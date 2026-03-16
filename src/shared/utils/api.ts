@@ -109,7 +109,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Auth token response from backend
+ * Auth token response from backend (initial auth handoff)
  */
 export interface AuthTokenResponse {
   token: string;
@@ -119,6 +119,14 @@ export interface AuthTokenResponse {
     email: string;
     name: string;
   };
+}
+
+/**
+ * Token refresh response from backend (subset — no user object)
+ */
+export interface RefreshTokenResponse {
+  token: string;
+  expiresAt: string; // ISO date string
 }
 
 /**
@@ -169,7 +177,7 @@ export const api = {
    * Refresh the auth token
    * Uses Authorization header (injected by request()) — no body needed
    */
-  async refreshToken(): Promise<{ token: string; expiresAt: string }> {
+  async refreshToken(): Promise<RefreshTokenResponse> {
     return request(API_CONFIG.ENDPOINTS.REFRESH_TOKEN, {
       method: "POST",
       retry: false,

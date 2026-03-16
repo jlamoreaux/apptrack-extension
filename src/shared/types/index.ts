@@ -77,7 +77,6 @@ export interface ApplicationPayload {
   description?: string;
   location?: string;
   salary?: string;
-  status?: "Applied" | "Interview Scheduled" | "Interviewed" | "Offer" | "Rejected";
   notes?: string;
 }
 

@@ -121,7 +121,7 @@ export async function clear(): Promise<void> {
 }
 
 /**
- * Get the current auth state (with decryption of tokens)
+ * Get the current auth state (with decryption of auth token)
  */
 export async function getAuthState(): Promise<AuthState> {
   const state = await get<AuthState & { encryptedToken?: string }>(
@@ -148,10 +148,10 @@ export async function getAuthState(): Promise<AuthState> {
 }
 
 /**
- * Set the auth state (with encryption of tokens)
+ * Set the auth state (with encryption of auth token)
  */
 export async function setAuthState(state: AuthState): Promise<void> {
-  // Encrypt sensitive tokens before storage
+  // Encrypt sensitive token before storage
   const encryptedState: Record<string, unknown> = {
     isAuthenticated: state.isAuthenticated,
     expiresAt: state.expiresAt,

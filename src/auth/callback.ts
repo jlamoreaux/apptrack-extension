@@ -114,20 +114,17 @@ async function handleCallback(): Promise<void> {
   }
 
   try {
-    // Parse expiresAt — accept both ISO string and numeric timestamp
-    let expiresAt: number;
+    // Parse expiresAt — accept both ISO string and numeric timestamp.
+    // Background's validateAuthPayload handles full validation (NaN, expiry).
+    let expiresAt: number | string;
     const parsed = Number(authParams.expiresAt);
     if (!isNaN(parsed) && parsed > 0) {
       expiresAt = parsed;
     } else {
-      expiresAt = new Date(authParams.expiresAt).getTime();
+      expiresAt = authParams.expiresAt;
     }
 
-    if (isNaN(expiresAt) || expiresAt <= Date.now()) {
-      throw new Error("Invalid or expired expiry time");
-    }
-
-    // Send auth data to background worker
+    // Send auth data to background worker (background validates expiresAt)
     const response = (await browser.runtime.sendMessage({
       type: "SET_AUTH_STATE",
       payload: {

@@ -268,6 +268,12 @@ async function refreshAuthToken(): Promise<boolean> {
       ? new Date(result.expiresAt).getTime()
       : result.expiresAt;
 
+    if (isNaN(expiresAt) || expiresAt <= Date.now()) {
+      console.error("[AppTrack] Token refresh returned invalid expiresAt:", result.expiresAt);
+      await handleLogout();
+      return false;
+    }
+
     await storage.setAuthState({
       ...authState,
       token: result.token,
@@ -337,16 +343,18 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       const hasJob = !!(jobData.title || jobData.company);
 
       if (hasJob) {
-        // Check if already tracked using company + role
+        // Check if already tracked using company + role (only if both are present)
         let isDuplicate = false;
-        try {
-          const duplicateCheck = await api.checkDuplicate(
-            jobData.company ?? "",
-            jobData.title ?? ""
-          );
-          isDuplicate = duplicateCheck.exists;
-        } catch {
-          // Ignore duplicate check errors
+        if (jobData.company && jobData.title) {
+          try {
+            const duplicateCheck = await api.checkDuplicate(
+              jobData.company,
+              jobData.title
+            );
+            isDuplicate = duplicateCheck.exists;
+          } catch {
+            // Ignore duplicate check errors
+          }
         }
 
         tabStates.set(tabId, { hasJob: true, jobData, isDuplicate });
@@ -459,7 +467,8 @@ browser.runtime.onMessage.addListener(
       case "CHECK_DUPLICATE":
         return handleCheckDuplicate(msg.payload);
       case "SET_AUTH_STATE":
-        // SECURITY: Only allow SET_AUTH_STATE from extension pages (popup/callback)
+        // SECURITY: Only allow SET_AUTH_STATE from extension pages (popup/callback).
+        // This prevents malicious content scripts from injecting arbitrary tokens.
         if (!isExtensionPage(sender)) {
           console.error("[AppTrack] Rejected SET_AUTH_STATE from non-extension page:", sender.url);
           return Promise.resolve({ success: false, error: "Unauthorized" });
@@ -683,13 +692,11 @@ browser.runtime.onMessageExternal.addListener(
   ): Promise<{ success: boolean; error?: string }> | undefined => {
     const msg = message as { type: string; payload?: unknown };
 
-    // Verify sender is from apptrack.ing (or localhost for development)
+    // Verify sender is from apptrack.ing
     const senderUrl = sender.url ?? "";
     const isValidSender =
       senderUrl.startsWith("https://apptrack.ing/") ||
-      senderUrl.startsWith("https://www.apptrack.ing/") ||
-      senderUrl.startsWith("http://localhost:") ||
-      senderUrl.startsWith("http://127.0.0.1:");
+      senderUrl.startsWith("https://www.apptrack.ing/");
 
     if (!isValidSender) {
       console.warn("[AppTrack] Rejected external message from:", senderUrl);
