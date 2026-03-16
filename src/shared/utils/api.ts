@@ -109,13 +109,16 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Auth token response structure
+ * Auth token response from backend
  */
-interface AuthTokenResponse {
+export interface AuthTokenResponse {
   token: string;
-  refreshToken?: string;
-  expiresAt: number;
-  userId: string;
+  expiresAt: string; // ISO date string
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
 }
 
 /**
@@ -123,22 +126,10 @@ interface AuthTokenResponse {
  */
 export const api = {
   /**
-   * Exchange authorization code for tokens
-   * Used in OAuth code flow when extension receives an auth code
+   * Check if an application already exists by company and role
    */
-  async exchangeAuthCode(authCode: string): Promise<AuthTokenResponse> {
-    return request(API_CONFIG.ENDPOINTS.AUTH_TOKEN, {
-      method: "POST",
-      body: JSON.stringify({ code: authCode }),
-      retry: false,
-    });
-  },
-
-  /**
-   * Check if an application already exists
-   */
-  async checkDuplicate(url: string): Promise<{ exists: boolean; applicationId?: string }> {
-    const params = new URLSearchParams({ url });
+  async checkDuplicate(company: string, role: string): Promise<{ exists: boolean; applicationId?: string }> {
+    const params = new URLSearchParams({ company, role });
     return request(`${API_CONFIG.ENDPOINTS.CHECK_DUPLICATE}?${params.toString()}`, {
       method: "GET",
     });
@@ -146,6 +137,7 @@ export const api = {
 
   /**
    * Save a new application
+   * Maps extension fields to backend expected format
    */
   async saveApplication(data: {
     jobTitle: string;
@@ -155,19 +147,31 @@ export const api = {
     location?: string;
     salary?: string;
   }): Promise<{ id: string }> {
+    // Build notes from location and salary if present
+    const notesParts: string[] = [];
+    if (data.location) notesParts.push(`Location: ${data.location}`);
+    if (data.salary) notesParts.push(`Salary: ${data.salary}`);
+
     return request(API_CONFIG.ENDPOINTS.APPLICATIONS, {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        role: data.jobTitle,
+        company: data.company,
+        role_link: data.jobUrl,
+        job_description: data.description ?? "",
+        date_applied: new Date().toISOString(),
+        notes: notesParts.length > 0 ? notesParts.join("\n") : undefined,
+      }),
     });
   },
 
   /**
    * Refresh the auth token
+   * Uses Authorization header (injected by request()) — no body needed
    */
-  async refreshToken(refreshToken: string): Promise<{ token: string; expiresAt: number }> {
+  async refreshToken(): Promise<{ token: string; expiresAt: string }> {
     return request(API_CONFIG.ENDPOINTS.REFRESH_TOKEN, {
       method: "POST",
-      body: JSON.stringify({ refreshToken }),
       retry: false,
     });
   },

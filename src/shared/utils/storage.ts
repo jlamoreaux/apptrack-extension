@@ -124,7 +124,7 @@ export async function clear(): Promise<void> {
  * Get the current auth state (with decryption of tokens)
  */
 export async function getAuthState(): Promise<AuthState> {
-  const state = await get<AuthState & { encryptedToken?: string; encryptedRefreshToken?: string }>(
+  const state = await get<AuthState & { encryptedToken?: string }>(
     STORAGE_KEYS.AUTH_STATE
   );
 
@@ -132,21 +132,16 @@ export async function getAuthState(): Promise<AuthState> {
     return { isAuthenticated: false };
   }
 
-  // Decrypt tokens if they exist
+  // Decrypt token if it exists
   let token = state.token;
-  let refreshToken = state.refreshToken;
 
   if (state.encryptedToken) {
     token = await decrypt(state.encryptedToken);
-  }
-  if (state.encryptedRefreshToken) {
-    refreshToken = await decrypt(state.encryptedRefreshToken);
   }
 
   return {
     isAuthenticated: state.isAuthenticated,
     token,
-    refreshToken,
     expiresAt: state.expiresAt,
     userId: state.userId,
   };
@@ -165,9 +160,6 @@ export async function setAuthState(state: AuthState): Promise<void> {
 
   if (state.token) {
     encryptedState.encryptedToken = await encrypt(state.token);
-  }
-  if (state.refreshToken) {
-    encryptedState.encryptedRefreshToken = await encrypt(state.refreshToken);
   }
 
   await set(STORAGE_KEYS.AUTH_STATE, encryptedState);

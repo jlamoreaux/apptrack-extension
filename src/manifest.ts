@@ -1,22 +1,21 @@
 import { defineManifest } from "@crxjs/vite-plugin";
 
-// Note: Replace SVG icons with PNG for production
 export default defineManifest({
   manifest_version: 3,
   name: "AppTrack - Job Application Tracker",
   description: "Save job applications with one click. Auto-extract job details and sync to your AppTrack dashboard.",
   version: "0.1.0",
   icons: {
-    "16": "icons/icon-16.svg",
-    "48": "icons/icon-48.svg",
-    "128": "icons/icon-128.svg",
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png",
   },
   action: {
     default_popup: "src/popup/index.html",
     default_icon: {
-      "16": "icons/icon-16.svg",
-      "48": "icons/icon-48.svg",
-      "128": "icons/icon-128.svg",
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png",
     },
     default_title: "AppTrack",
   },
@@ -26,6 +25,9 @@ export default defineManifest({
   },
   content_scripts: [
     {
+      // <all_urls> is required because job postings appear on any domain (LinkedIn, Indeed,
+      // Greenhouse, Lever, company career pages, etc.). The content script only extracts
+      // structured data (JSON-LD, meta tags) and does not modify pages.
       matches: ["<all_urls>"],
       js: ["src/content/index.ts"],
       run_at: "document_idle",
@@ -34,8 +36,14 @@ export default defineManifest({
   permissions: ["storage", "activeTab", "alarms"],
   host_permissions: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
   // Allow apptrack.ing to send messages directly to the extension for auth
+  // Include localhost for local development
   externally_connectable: {
-    matches: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
+    matches: [
+      "https://apptrack.ing/*",
+      "https://*.apptrack.ing/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+    ],
   },
   web_accessible_resources: [
     {
@@ -45,7 +53,6 @@ export default defineManifest({
     },
     {
       // Auth callback page should only be accessible from apptrack.ing
-      // This prevents arbitrary websites from opening/iframing the callback
       resources: ["src/auth/callback.html"],
       matches: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
     },

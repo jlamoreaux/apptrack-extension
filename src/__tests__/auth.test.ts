@@ -8,9 +8,9 @@ import "./setup"; // Import setup for mocks
 // Mock api module
 vi.mock("@/shared/utils/api", () => ({
   api: {
-    exchangeAuthCode: vi.fn(),
     validateToken: vi.fn(),
     refreshToken: vi.fn(),
+    checkDuplicate: vi.fn(),
   },
   ApiClientError: class ApiClientError extends Error {
     code?: string;
@@ -43,24 +43,13 @@ describe("Auth Callback URL Parsing", () => {
   it("should parse direct token flow params correctly", () => {
     const params = createParams({
       token: "test-token-123",
-      refreshToken: "refresh-token-456",
-      expiresAt: "1735689600000",
+      expiresAt: "2027-01-15T00:00:00.000Z",
       userId: "user-789",
     });
 
     expect(params.get("token")).toBe("test-token-123");
-    expect(params.get("refreshToken")).toBe("refresh-token-456");
-    expect(params.get("expiresAt")).toBe("1735689600000");
+    expect(params.get("expiresAt")).toBe("2027-01-15T00:00:00.000Z");
     expect(params.get("userId")).toBe("user-789");
-  });
-
-  it("should parse authorization code flow params", () => {
-    const params = createParams({
-      code: "auth-code-xyz",
-    });
-
-    expect(params.get("code")).toBe("auth-code-xyz");
-    expect(params.get("token")).toBeNull();
   });
 
   it("should parse error params", () => {
@@ -128,7 +117,6 @@ describe("Auth State Management", () => {
 
     const authPayload = {
       token: "new-token",
-      refreshToken: "new-refresh",
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       userId: "user-123",
     };
@@ -142,7 +130,6 @@ describe("Auth State Management", () => {
     expect(mockSetAuthState).toHaveBeenCalledWith({
       isAuthenticated: true,
       token: authPayload.token,
-      refreshToken: authPayload.refreshToken,
       expiresAt: authPayload.expiresAt,
       userId: authPayload.userId,
     });
@@ -159,75 +146,38 @@ describe("Auth State Management", () => {
   });
 });
 
-describe("Token Exchange", () => {
-  it("should exchange auth code for tokens", async () => {
-    const { api } = await import("@/shared/utils/api");
-    const mockExchangeAuthCode = vi.mocked(api.exchangeAuthCode);
-
-    const mockResponse = {
-      token: "access-token",
-      refreshToken: "refresh-token",
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      userId: "user-456",
-    };
-
-    mockExchangeAuthCode.mockResolvedValue(mockResponse);
-
-    const result = await api.exchangeAuthCode("auth-code-123");
-
-    expect(mockExchangeAuthCode).toHaveBeenCalledWith("auth-code-123");
-    expect(result).toEqual(mockResponse);
-  });
-
-  it("should handle token exchange errors", async () => {
-    const { api, ApiClientError } = await import("@/shared/utils/api");
-    const mockExchangeAuthCode = vi.mocked(api.exchangeAuthCode);
-
-    mockExchangeAuthCode.mockRejectedValue(
-      new ApiClientError("Invalid auth code", "INVALID_CODE", 400)
-    );
-
-    await expect(api.exchangeAuthCode("invalid-code")).rejects.toThrow(
-      "Invalid auth code"
-    );
-  });
-});
-
 describe("Token Refresh", () => {
-  it("should refresh token before expiry", async () => {
+  it("should refresh token using Authorization header (no args)", async () => {
     const { api } = await import("@/shared/utils/api");
     const mockRefreshToken = vi.mocked(api.refreshToken);
 
     const mockResponse = {
       token: "new-access-token",
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
     mockRefreshToken.mockResolvedValue(mockResponse);
 
-    const result = await api.refreshToken("refresh-token-123");
+    const result = await api.refreshToken();
 
-    expect(mockRefreshToken).toHaveBeenCalledWith("refresh-token-123");
+    expect(mockRefreshToken).toHaveBeenCalledWith();
     expect(result.token).toBe("new-access-token");
   });
 
-  it("should handle expired refresh token", async () => {
+  it("should handle expired token", async () => {
     const { api, ApiClientError } = await import("@/shared/utils/api");
     const mockRefreshToken = vi.mocked(api.refreshToken);
 
     mockRefreshToken.mockRejectedValue(
-      new ApiClientError("Refresh token expired", "TOKEN_EXPIRED", 401)
+      new ApiClientError("Token expired", "TOKEN_EXPIRED", 401)
     );
 
-    await expect(api.refreshToken("expired-token")).rejects.toThrow(
-      "Refresh token expired"
-    );
+    await expect(api.refreshToken()).rejects.toThrow("Token expired");
   });
 });
 
 describe("PING message for extension detection", () => {
   it("should respond to PING from apptrack.ing", () => {
-    // The PING message allows the web app to detect if the extension is installed
     const handlePing = () => {
       return Promise.resolve({ success: true });
     };

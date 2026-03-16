@@ -41,13 +41,13 @@ const tabStates = new Map<number, TabState>();
 
 interface AuthPayload {
   token: string;
-  refreshToken?: string;
   expiresAt: number;
   userId: string;
 }
 
 /**
- * Validate auth payload has required fields with correct types
+ * Validate auth payload has required fields with correct types.
+ * Accepts expiresAt as either a number (timestamp) or ISO string, normalizes to number.
  */
 function validateAuthPayload(payload: unknown): { valid: true; data: AuthPayload } | { valid: false; error: string } {
   if (!payload || typeof payload !== "object") {
@@ -60,7 +60,17 @@ function validateAuthPayload(payload: unknown): { valid: true; data: AuthPayload
     return { valid: false, error: "Invalid or missing token" };
   }
 
-  if (typeof data.expiresAt !== "number" || data.expiresAt <= Date.now()) {
+  // Normalize expiresAt: accept number or ISO string
+  let expiresAt: number;
+  if (typeof data.expiresAt === "number") {
+    expiresAt = data.expiresAt;
+  } else if (typeof data.expiresAt === "string") {
+    expiresAt = new Date(data.expiresAt).getTime();
+  } else {
+    return { valid: false, error: "Invalid or missing expiresAt" };
+  }
+
+  if (isNaN(expiresAt) || expiresAt <= Date.now()) {
     return { valid: false, error: "Invalid or expired expiresAt timestamp" };
   }
 
@@ -68,16 +78,11 @@ function validateAuthPayload(payload: unknown): { valid: true; data: AuthPayload
     return { valid: false, error: "Invalid or missing userId" };
   }
 
-  if (data.refreshToken !== undefined && typeof data.refreshToken !== "string") {
-    return { valid: false, error: "Invalid refreshToken format" };
-  }
-
   return {
     valid: true,
     data: {
       token: data.token,
-      refreshToken: data.refreshToken as string | undefined,
-      expiresAt: data.expiresAt,
+      expiresAt,
       userId: data.userId,
     },
   };
@@ -90,7 +95,6 @@ async function storeAuthAndSetup(authData: AuthPayload): Promise<void> {
   await storage.setAuthState({
     isAuthenticated: true,
     token: authData.token,
-    refreshToken: authData.refreshToken,
     expiresAt: authData.expiresAt,
     userId: authData.userId,
   });
@@ -116,7 +120,7 @@ function isExtensionPage(sender: browser.Runtime.MessageSender): boolean {
 
 // Initialize on install
 browser.runtime.onInstalled.addListener(async (details) => {
-  console.warn("[AppTrack] Extension installed:", details.reason);
+  console.log("[AppTrack] Extension installed:", details.reason);
 
   // Set default icon state
   await updateIconState(ICON_STATES.DEFAULT);
@@ -127,7 +131,7 @@ browser.runtime.onInstalled.addListener(async (details) => {
 
 // Initialize on startup
 browser.runtime.onStartup.addListener(async () => {
-  console.warn("[AppTrack] Extension started");
+  console.log("[AppTrack] Extension started");
 
   // Restore icon state based on auth
   const authState = await storage.getAuthState();
@@ -244,36 +248,42 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 /**
- * Refresh the authentication token
+ * Refresh the authentication token.
+ * Uses Authorization header (sent automatically by api.request) — no refresh token needed.
  */
 async function refreshAuthToken(): Promise<boolean> {
   try {
     const authState = await storage.getAuthState();
 
-    if (!authState.refreshToken) {
-      console.warn("[AppTrack] No refresh token available");
+    if (!authState.token) {
+      console.log("[AppTrack] No token available for refresh");
       await handleLogout();
       return false;
     }
 
-    const result = await api.refreshToken(authState.refreshToken);
+    const result = await api.refreshToken();
+
+    // Backend returns expiresAt as ISO string — convert to timestamp
+    const expiresAt = typeof result.expiresAt === "string"
+      ? new Date(result.expiresAt).getTime()
+      : result.expiresAt;
 
     await storage.setAuthState({
       ...authState,
       token: result.token,
-      expiresAt: result.expiresAt,
+      expiresAt,
     });
 
     // Setup next refresh alarm
     await setupTokenRefreshAlarm();
 
-    console.warn("[AppTrack] Token refreshed successfully");
+    console.log("[AppTrack] Token refreshed successfully");
     return true;
   } catch (error) {
     console.error("[AppTrack] Token refresh failed:", error);
 
     if (error instanceof ApiClientError && error.status === 401) {
-      // Refresh token is invalid, logout
+      // Token is invalid, logout
       await handleLogout();
     }
 
@@ -327,10 +337,13 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       const hasJob = !!(jobData.title || jobData.company);
 
       if (hasJob) {
-        // Check if already tracked
+        // Check if already tracked using company + role
         let isDuplicate = false;
         try {
-          const duplicateCheck = await api.checkDuplicate(jobData.url);
+          const duplicateCheck = await api.checkDuplicate(
+            jobData.company ?? "",
+            jobData.title ?? ""
+          );
           isDuplicate = duplicateCheck.exists;
         } catch {
           // Ignore duplicate check errors
@@ -403,7 +416,7 @@ async function processPendingSaves(): Promise<void> {
   for (const item of pending) {
     try {
       await api.saveApplication(item.data);
-      console.warn("[AppTrack] Processed pending save:", item.id);
+      console.log("[AppTrack] Processed pending save:", item.id);
     } catch (error) {
       // Keep in queue if network error, discard if 4xx
       if (error instanceof ApiClientError && error.status && error.status >= 400 && error.status < 500) {
@@ -447,7 +460,6 @@ browser.runtime.onMessage.addListener(
         return handleCheckDuplicate(msg.payload);
       case "SET_AUTH_STATE":
         // SECURITY: Only allow SET_AUTH_STATE from extension pages (popup/callback)
-        // This prevents malicious content scripts from injecting arbitrary tokens
         if (!isExtensionPage(sender)) {
           console.error("[AppTrack] Rejected SET_AUTH_STATE from non-extension page:", sender.url);
           return Promise.resolve({ success: false, error: "Unauthorized" });
@@ -467,20 +479,22 @@ browser.runtime.onMessage.addListener(
  * Get current authentication state
  */
 async function handleGetAuthState(): Promise<{
-  isAuthenticated: boolean;
-  userId?: string;
-  expiresAt?: number;
+  success: boolean;
+  data: { isAuthenticated: boolean; userId?: string; expiresAt?: number };
 }> {
   try {
     const authState = await storage.getAuthState();
     return {
-      isAuthenticated: authState.isAuthenticated,
-      userId: authState.userId,
-      expiresAt: authState.expiresAt,
+      success: true,
+      data: {
+        isAuthenticated: authState.isAuthenticated,
+        userId: authState.userId,
+        expiresAt: authState.expiresAt,
+      },
     };
   } catch (error) {
     console.error("[AppTrack] Error getting auth state:", error);
-    return { isAuthenticated: false };
+    return { success: true, data: { isAuthenticated: false } };
   }
 }
 
@@ -491,7 +505,6 @@ async function handleSetAuthState(
   payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Validate payload structure and types
     const validation = validateAuthPayload(payload);
     if (!validation.valid) {
       return { success: false, error: validation.error };
@@ -567,7 +580,7 @@ async function handleGetJobData(
 async function handleSaveApplication(
   payload: unknown,
   tabId?: number
-): Promise<{ success: boolean; id?: string; error?: string; queued?: boolean }> {
+): Promise<{ success: boolean; data?: { id: string; queued?: boolean }; error?: string }> {
   try {
     const authState = await storage.getAuthState();
     if (!authState.isAuthenticated) {
@@ -592,7 +605,7 @@ async function handleSaveApplication(
         }
       }
 
-      return { success: true, id: result.id };
+      return { success: true, data: { id: result.id } };
     } catch (error) {
       // If network error, queue for later
       if (
@@ -600,7 +613,7 @@ async function handleSaveApplication(
         (!error.status || error.code === "TIMEOUT")
       ) {
         const pendingId = await addPendingSave(applicationData);
-        return { success: true, id: pendingId, queued: true };
+        return { success: true, data: { id: pendingId, queued: true } };
       }
 
       throw error;
@@ -615,15 +628,15 @@ async function handleSaveApplication(
 }
 
 /**
- * Check if a job URL is already tracked
+ * Check if a job is already tracked by company and role
  */
 async function handleCheckDuplicate(
   payload: unknown
-): Promise<{ success: boolean; exists?: boolean; applicationId?: string; error?: string }> {
+): Promise<{ success: boolean; data?: { exists: boolean; applicationId?: string }; error?: string }> {
   try {
-    const { url } = payload as { url: string };
-    if (!url) {
-      return { success: false, error: "URL required" };
+    const { company, role } = payload as { company: string; role: string };
+    if (!company || !role) {
+      return { success: false, error: "Company and role required" };
     }
 
     const authState = await storage.getAuthState();
@@ -631,8 +644,8 @@ async function handleCheckDuplicate(
       return { success: false, error: "Not authenticated" };
     }
 
-    const result = await api.checkDuplicate(url);
-    return { success: true, exists: result.exists, applicationId: result.applicationId };
+    const result = await api.checkDuplicate(company, role);
+    return { success: true, data: { exists: result.exists, applicationId: result.applicationId } };
   } catch (error) {
     console.error("[AppTrack] Error checking duplicate:", error);
     return {
@@ -649,7 +662,7 @@ async function handleCheckDuplicate(
 // Process pending saves when coming back online
 if (typeof navigator !== "undefined" && "onLine" in navigator) {
   self.addEventListener("online", () => {
-    console.warn("[AppTrack] Back online, processing pending saves");
+    console.log("[AppTrack] Back online, processing pending saves");
     processPendingSaves().catch(console.error);
   });
 }
@@ -659,8 +672,9 @@ if (typeof navigator !== "undefined" && "onLine" in navigator) {
 // ============================================================================
 
 /**
- * Handle messages from apptrack.ing for OAuth authentication
- * This allows the web app to send auth tokens directly to the extension
+ * Handle messages from apptrack.ing for OAuth authentication.
+ * The web app calls chrome.runtime.sendMessage(extensionId, { type: 'AUTH_CALLBACK', payload })
+ * with { token, expiresAt: ISO string, user: { id, email, name } }
  */
 browser.runtime.onMessageExternal.addListener(
   (
@@ -669,11 +683,13 @@ browser.runtime.onMessageExternal.addListener(
   ): Promise<{ success: boolean; error?: string }> | undefined => {
     const msg = message as { type: string; payload?: unknown };
 
-    // Verify sender is from apptrack.ing
+    // Verify sender is from apptrack.ing (or localhost for development)
     const senderUrl = sender.url ?? "";
     const isValidSender =
       senderUrl.startsWith("https://apptrack.ing/") ||
-      senderUrl.startsWith("https://www.apptrack.ing/");
+      senderUrl.startsWith("https://www.apptrack.ing/") ||
+      senderUrl.startsWith("http://localhost:") ||
+      senderUrl.startsWith("http://127.0.0.1:");
 
     if (!isValidSender) {
       console.warn("[AppTrack] Rejected external message from:", senderUrl);
@@ -697,15 +713,33 @@ browser.runtime.onMessageExternal.addListener(
 );
 
 /**
- * Handle OAuth callback from apptrack.ing
- * Receives tokens after successful authentication
+ * Handle OAuth callback from apptrack.ing.
+ * Receives { token, expiresAt: ISO string, user: { id, email, name } } from web app.
  */
 async function handleAuthCallback(
   payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Validate payload structure and types
-    const validation = validateAuthPayload(payload);
+    if (!payload || typeof payload !== "object") {
+      return { success: false, error: "Invalid payload" };
+    }
+
+    const data = payload as Record<string, unknown>;
+
+    // Extract userId from user object if present (web app sends user: { id, email, name })
+    let userId = data.userId as string | undefined;
+    if (!userId && data.user && typeof data.user === "object") {
+      userId = (data.user as Record<string, unknown>).id as string | undefined;
+    }
+
+    // Rebuild payload with extracted userId for validation
+    const normalizedPayload = {
+      token: data.token,
+      expiresAt: data.expiresAt,
+      userId,
+    };
+
+    const validation = validateAuthPayload(normalizedPayload);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
