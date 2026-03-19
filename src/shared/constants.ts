@@ -66,4 +66,57 @@ export const DEFAULT_SETTINGS = {
   autoDetect: true,
   showNotifications: true,
   analyticsOptOut: false,
+  fullSiteAccess: false,
 } as const;
+
+/**
+ * Curated list of job board and ATS domains for the default content script.
+ * Covers the vast majority of job applications without requiring <all_urls>.
+ * Users can opt into full-site access via extension settings.
+ */
+export const JOB_BOARD_MATCHES = [
+  // Major job boards
+  "*://*.linkedin.com/jobs/*",
+  "*://*.indeed.com/*",
+  "*://*.glassdoor.com/*",
+  "*://*.ziprecruiter.com/*",
+  "*://*.monster.com/*",
+  "*://www.dice.com/*",
+  "*://*.simplyhired.com/*",
+  "*://wellfound.com/*",
+  "*://angel.co/*",
+  "*://*.hired.com/*",
+  "*://www.careerbuilder.com/*",
+  "*://*.handshake.com/*",
+  // ATS platforms (company career pages)
+  "*://boards.greenhouse.io/*",
+  "*://jobs.lever.co/*",
+  "*://*.myworkdayjobs.com/*",
+  "*://*.icims.com/*",
+  "*://*.taleo.net/*",
+  "*://*.bamboohr.com/*",
+  "*://*.smartrecruiters.com/*",
+  "*://*.jobvite.com/*",
+  "*://jobs.ashbyhq.com/*",
+  "*://apply.workable.com/*",
+  "*://*.breezy.hr/*",
+  "*://*.recruitee.com/*",
+  "*://*.applytojob.com/*",
+  "*://*.rippling.com/*",
+  "*://*.paylocity.com/*",
+  "*://*.successfactors.com/*",
+  "*://*.paycom.com/*",
+  // AppTrack itself
+  "*://apptrack.ing/*",
+  "*://*.apptrack.ing/*",
+] as const;
+
+/**
+ * ID used when dynamically registering the full-site content script.
+ */
+export const FULL_SITE_SCRIPT_ID = "apptrack-allurls-content";
+
+/**
+ * Optional host permission that enables the extension on all websites.
+ */
+export const FULL_SITE_ORIGIN = "<all_urls>";

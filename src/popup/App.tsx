@@ -82,21 +82,25 @@ export default function App() {
 
 interface AppState {
   view: ExtensionState;
+  previousView: ExtensionState | null;
   loading: boolean;
   jobData: JobData | null;
   error: string | null;
   savedId: string | null;
   wasQueued: boolean;
+  fullSiteAccess: boolean;
 }
 
 function AppContent() {
   const [state, setState] = useState<AppState>({
     view: "logged_out",
+    previousView: null,
     loading: true,
     jobData: null,
     error: null,
     savedId: null,
     wasQueued: false,
+    fullSiteAccess: false,
   });
 
   // Guard to prevent concurrent initialization calls
@@ -121,11 +125,14 @@ function AppContent() {
         return;
       }
 
+      // Load full-site access status
+      const fullSiteAccess = await messages.getFullSiteStatus();
+
       // Fetch job data from current tab
       const jobResult = await messages.getJobData();
 
       if (!jobResult.success || !jobResult.data) {
-        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        setState((s) => ({ ...s, view: "no_job", fullSiteAccess, loading: false }));
         return;
       }
 
@@ -133,7 +140,7 @@ function AppContent() {
       const hasJob = !!(jobData.title || jobData.company);
 
       if (!hasJob) {
-        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        setState((s) => ({ ...s, view: "no_job", fullSiteAccess, loading: false }));
         return;
       }
 
@@ -148,6 +155,7 @@ function AppContent() {
           ...s,
           view: "already_tracked",
           jobData,
+          fullSiteAccess,
           loading: false,
         }));
         return;
@@ -158,6 +166,7 @@ function AppContent() {
         ...s,
         view: "job_detected",
         jobData,
+        fullSiteAccess,
         loading: false,
       }));
     } catch (error) {
@@ -248,6 +257,29 @@ function AppContent() {
     window.location.reload();
   }, []);
 
+  // Open settings view
+  const handleOpenSettings = useCallback(() => {
+    setState((s) => ({ ...s, previousView: s.view, view: "settings" }));
+  }, []);
+
+  // Close settings view, return to previous
+  const handleCloseSettings = useCallback(() => {
+    setState((s) => ({ ...s, view: s.previousView ?? "no_job", previousView: null }));
+  }, []);
+
+  // Toggle full-site access
+  const handleToggleFullSite = useCallback(async (enable: boolean) => {
+    if (enable) {
+      const result = await messages.enableFullSiteAccess();
+      if (result.success) {
+        setState((s) => ({ ...s, fullSiteAccess: true }));
+      }
+    } else {
+      await messages.disableFullSiteAccess();
+      setState((s) => ({ ...s, fullSiteAccess: false }));
+    }
+  }, []);
+
   // Loading state
   if (state.loading && state.view === "logged_out") {
     return (
@@ -257,14 +289,32 @@ function AppContent() {
     );
   }
 
+  const showSettingsButton = state.view !== "logged_out" && state.view !== "settings";
+
   // Render based on view state
   return (
     <div className="w-80">
       <div className="p-4">
-        <Header
-          showLogout={state.view !== "logged_out"}
-          onLogout={handleLogout}
-        />
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <Header
+              showLogout={state.view !== "logged_out"}
+              onLogout={handleLogout}
+            />
+          </div>
+          {showSettingsButton && (
+            <button
+              onClick={handleOpenSettings}
+              className="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded"
+              title="Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         {state.view === "logged_out" && <LoggedOutView />}
         {state.view === "no_job" && <NoJobView />}
@@ -285,6 +335,13 @@ function AppContent() {
         )}
         {state.view === "error" && (
           <ErrorView message={state.error} onRetry={handleReset} />
+        )}
+        {state.view === "settings" && (
+          <SettingsView
+            fullSiteAccess={state.fullSiteAccess}
+            onToggleFullSite={handleToggleFullSite}
+            onBack={handleCloseSettings}
+          />
         )}
       </div>
     </div>
@@ -571,6 +628,75 @@ function ErrorView({ message, onRetry }: ErrorViewProps) {
       <Button variant="secondary" onClick={onRetry} className="w-full">
         Try Again
       </Button>
+    </div>
+  );
+}
+
+interface SettingsViewProps {
+  fullSiteAccess: boolean;
+  onToggleFullSite: (enable: boolean) => Promise<void>;
+  onBack: () => void;
+}
+
+function SettingsView({ fullSiteAccess, onToggleFullSite, onBack }: SettingsViewProps) {
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    try {
+      await onToggleFullSite(!fullSiteAccess);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  return (
+    <div className="py-2">
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={onBack}
+          className="p-1 text-gray-400 hover:text-gray-600 rounded"
+          title="Back"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 className="text-base font-semibold text-gray-900">Settings</h2>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3 py-3 border-b border-gray-100">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-900">Enable on all websites</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Detect job postings on any site, including company career pages not on the default list.
+              Chrome will ask for permission when you turn this on.
+            </p>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`relative flex-shrink-0 w-10 h-6 rounded-full transition-colors focus:outline-none ${
+              fullSiteAccess ? "bg-brand-500" : "bg-gray-200"
+            } ${toggling ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            role="switch"
+            aria-checked={fullSiteAccess}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                fullSiteAccess ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="pt-1">
+          <p className="text-xs text-gray-400">
+            Default list covers LinkedIn, Indeed, Greenhouse, Lever, Workday, and 20+ other job boards.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

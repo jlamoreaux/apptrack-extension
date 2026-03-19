@@ -3,8 +3,8 @@
  */
 
 import browser from "webextension-polyfill";
-import type { AuthState } from "@/shared/types";
-import { STORAGE_KEYS } from "@/shared/constants";
+import type { AuthState, ExtensionSettings } from "@/shared/types";
+import { STORAGE_KEYS, DEFAULT_SETTINGS } from "@/shared/constants";
 
 type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
@@ -172,6 +172,22 @@ export async function clearAuthState(): Promise<void> {
   await remove(STORAGE_KEYS.AUTH_STATE);
 }
 
+/**
+ * Get extension settings, merging with defaults for any missing keys
+ */
+export async function getSettings(): Promise<ExtensionSettings> {
+  const stored = await get<Partial<ExtensionSettings>>(STORAGE_KEYS.SETTINGS);
+  return { ...DEFAULT_SETTINGS, ...stored };
+}
+
+/**
+ * Update extension settings (merges with existing)
+ */
+export async function setSettings(updates: Partial<ExtensionSettings>): Promise<void> {
+  const current = await getSettings();
+  await set(STORAGE_KEYS.SETTINGS, { ...current, ...updates });
+}
+
 export const storage = {
   get,
   set,
@@ -180,4 +196,6 @@ export const storage = {
   getAuthState,
   setAuthState,
   clearAuthState,
+  getSettings,
+  setSettings,
 };

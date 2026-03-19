@@ -35,7 +35,19 @@ export type ExtensionState =
   | "job_detected"
   | "already_tracked"
   | "success"
-  | "error";
+  | "error"
+  | "settings";
+
+/**
+ * User-configurable extension settings
+ */
+export interface ExtensionSettings {
+  autoDetect: boolean;
+  showNotifications: boolean;
+  analyticsOptOut: boolean;
+  /** When true, the content script runs on all websites, not just the curated job board list */
+  fullSiteAccess: boolean;
+}
 
 /**
  * Message types for communication between extension components
@@ -48,7 +60,10 @@ export type MessageType =
   | "SAVE_APPLICATION"
   | "CHECK_DUPLICATE"
   | "REFRESH_TOKEN"
-  | "LOGOUT";
+  | "LOGOUT"
+  | "ENABLE_FULL_SITE_ACCESS"
+  | "DISABLE_FULL_SITE_ACCESS"
+  | "GET_FULL_SITE_STATUS";
 
 /**
  * Base message structure

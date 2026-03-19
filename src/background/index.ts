@@ -10,6 +10,8 @@ import {
   ICON_STATES,
   TOKEN_CONFIG,
   STORAGE_KEYS,
+  FULL_SITE_SCRIPT_ID,
+  FULL_SITE_ORIGIN,
 } from "@/shared/constants";
 import type { JobData, ApplicationPayload } from "@/shared/types";
 
@@ -144,6 +146,17 @@ browser.runtime.onStartup.addListener(async () => {
 
   // Process any pending saves
   await processPendingSaves();
+
+  // Restore full-site content script if permission is still granted.
+  // Dynamic script registrations persist, but we re-verify the permission
+  // is still active in case the user revoked it via chrome://extensions.
+  const granted = await hasFullSitePermission();
+  if (granted) {
+    await registerFullSiteContentScript();
+  } else {
+    // Permission was revoked externally — sync settings
+    await storage.setSettings({ fullSiteAccess: false });
+  }
 });
 
 // ============================================================================
@@ -387,6 +400,85 @@ browser.tabs.onRemoved.addListener((tabId) => {
 });
 
 // ============================================================================
+// Full-Site Access (Optional Permission)
+// ============================================================================
+
+/**
+ * Check whether the full-site optional permission is currently granted.
+ */
+async function hasFullSitePermission(): Promise<boolean> {
+  try {
+    return await browser.permissions.contains({ origins: [FULL_SITE_ORIGIN] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Register the dynamic content script for full-site access.
+ * Called after the optional permission is granted.
+ */
+async function registerFullSiteContentScript(): Promise<void> {
+  try {
+    // Unregister first to avoid duplicate registration errors
+    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] }).catch(() => {});
+    await chrome.scripting.registerContentScripts([
+      {
+        id: FULL_SITE_SCRIPT_ID,
+        matches: ["<all_urls>"],
+        js: ["src/content/index.js"],
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      },
+    ]);
+  } catch (error) {
+    console.error("[AppTrack] Failed to register full-site content script:", error);
+  }
+}
+
+/**
+ * Unregister the dynamic full-site content script.
+ */
+async function unregisterFullSiteContentScript(): Promise<void> {
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] });
+  } catch {
+    // Script may not be registered — ignore
+  }
+}
+
+/**
+ * Enable full-site access: request permission and register content script.
+ * Returns true if permission was granted.
+ */
+async function enableFullSiteAccess(): Promise<boolean> {
+  try {
+    const granted = await browser.permissions.request({ origins: [FULL_SITE_ORIGIN] });
+    if (granted) {
+      await registerFullSiteContentScript();
+      await storage.setSettings({ fullSiteAccess: true });
+    }
+    return granted;
+  } catch (error) {
+    console.error("[AppTrack] Error enabling full-site access:", error);
+    return false;
+  }
+}
+
+/**
+ * Disable full-site access: remove permission and unregister content script.
+ */
+async function disableFullSiteAccess(): Promise<void> {
+  try {
+    await unregisterFullSiteContentScript();
+    await browser.permissions.remove({ origins: [FULL_SITE_ORIGIN] });
+    await storage.setSettings({ fullSiteAccess: false });
+  } catch (error) {
+    console.error("[AppTrack] Error disabling full-site access:", error);
+  }
+}
+
+// ============================================================================
 // Offline Queue / Pending Saves
 // ============================================================================
 
@@ -478,6 +570,12 @@ browser.runtime.onMessage.addListener(
         return handleLogoutMessage();
       case "REFRESH_TOKEN":
         return handleRefreshToken();
+      case "ENABLE_FULL_SITE_ACCESS":
+        return enableFullSiteAccess().then((granted) => ({ success: granted }));
+      case "DISABLE_FULL_SITE_ACCESS":
+        return disableFullSiteAccess().then(() => ({ success: true }));
+      case "GET_FULL_SITE_STATUS":
+        return hasFullSitePermission().then((enabled) => ({ success: true, data: { enabled } }));
       default:
         return undefined;
     }
