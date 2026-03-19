@@ -14,6 +14,9 @@ import {
   FULL_SITE_ORIGIN,
 } from "@/shared/constants";
 import type { JobData, ApplicationPayload } from "@/shared/types";
+// CRXJS resolves this to the correct built path at bundle time.
+// Using ?script ensures the path stays correct even if CRXJS adds content hashing.
+import contentScriptUrl from "../content/index.ts?script";
 
 // ============================================================================
 // Types
@@ -426,7 +429,9 @@ async function registerFullSiteContentScript(): Promise<void> {
       {
         id: FULL_SITE_SCRIPT_ID,
         matches: ["<all_urls>"],
-        js: ["src/content/index.js"],
+        // contentScriptUrl is resolved by CRXJS at build time — avoids hardcoding
+        // a path that may be hashed or relocated in the extension bundle.
+        js: [contentScriptUrl],
         runAt: "document_idle",
         persistAcrossSessions: true,
       },
@@ -450,6 +455,10 @@ async function unregisterFullSiteContentScript(): Promise<void> {
 /**
  * Enable full-site access: request permission and register content script.
  * Returns true if permission was granted.
+ *
+ * Note: browser.permissions.request requires a user gesture. This function
+ * must only be called in response to a user action (e.g., popup button click
+ * → message to background). Calling it programmatically on startup will fail.
  */
 async function enableFullSiteAccess(): Promise<boolean> {
   try {

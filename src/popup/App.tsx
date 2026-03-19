@@ -275,8 +275,14 @@ function AppContent() {
         setState((s) => ({ ...s, fullSiteAccess: true }));
       }
     } else {
-      await messages.disableFullSiteAccess();
-      setState((s) => ({ ...s, fullSiteAccess: false }));
+      const result = await messages.disableFullSiteAccess();
+      if (result.success) {
+        setState((s) => ({ ...s, fullSiteAccess: false }));
+      } else {
+        // Reconcile with actual permission state if disable failed
+        const actual = await messages.getFullSiteStatus();
+        setState((s) => ({ ...s, fullSiteAccess: actual }));
+      }
     }
   }, []);
 
