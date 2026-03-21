@@ -147,4 +147,28 @@ export const messages = {
       error: response.error,
     };
   },
+
+  /**
+   * Enable full-site access (requests optional permission + registers content script)
+   */
+  async enableFullSiteAccess(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("ENABLE_FULL_SITE_ACCESS");
+    return { success: response.success ?? false };
+  },
+
+  /**
+   * Disable full-site access (removes permission + unregisters content script)
+   */
+  async disableFullSiteAccess(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("DISABLE_FULL_SITE_ACCESS");
+    return { success: response.success ?? false };
+  },
+
+  /**
+   * Check if full-site access permission is currently active
+   */
+  async getFullSiteStatus(): Promise<boolean> {
+    const response = await sendToBackground<{ enabled: boolean }>("GET_FULL_SITE_STATUS");
+    return response.data?.enabled ?? false;
+  },
 };

@@ -1,4 +1,5 @@
 import { defineManifest } from "@crxjs/vite-plugin";
+import { JOB_BOARD_MATCHES } from "./shared/constants";
 
 export default defineManifest((env) => {
   const isDev = env.mode === "development";
@@ -28,15 +29,17 @@ export default defineManifest((env) => {
     },
     content_scripts: [
       {
-        // <all_urls> is required because job postings appear on any domain (LinkedIn, Indeed,
-        // Greenhouse, Lever, company career pages, etc.). The content script only extracts
-        // structured data (JSON-LD, meta tags) and does not modify pages.
-        matches: ["<all_urls>"],
+        // Default: curated list of job boards and ATS platforms covering the
+        // majority of job applications. Users can opt into full-site access
+        // via extension settings, which dynamically registers a content script
+        // for <all_urls> using the optional_host_permissions grant.
+        matches: [...JOB_BOARD_MATCHES],
         js: ["src/content/index.ts"],
         run_at: "document_idle" as const,
       },
     ],
-    permissions: ["storage", "activeTab", "alarms"],
+    permissions: ["storage", "activeTab", "alarms", "scripting"],
+    optional_host_permissions: ["<all_urls>"],
     host_permissions: ["https://apptrack.ing/*", "https://*.apptrack.ing/*"],
     // Allow apptrack.ing to send messages directly to the extension for auth
     externally_connectable: {
