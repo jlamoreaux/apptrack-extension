@@ -13,6 +13,7 @@ export const API_CONFIG = {
     VALIDATE_TOKEN: "/auth/validate",
     CHECK_DUPLICATE: "/applications/check-duplicate",
     APPLICATIONS: "/applications",
+    JOB_FIT: "/ai-coach/job-fit",
   },
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
@@ -27,6 +28,7 @@ export const STORAGE_KEYS = {
   PENDING_SAVES: "apptrack_pending_saves",
   SETTINGS: "apptrack_settings",
   ANALYTICS_OPT_OUT: "apptrack_analytics_opt_out",
+  JOB_FIT_CACHE: "apptrack_job_fit_cache",
 } as const;
 
 /**
@@ -39,6 +41,14 @@ export const TOKEN_CONFIG = {
   REFRESH_BEFORE_EXPIRY: 24 * 60 * 60 * 1000, // 1 day
   /** Alarm name for token refresh */
   REFRESH_ALARM_NAME: "apptrack_token_refresh",
+} as const;
+
+/**
+ * Job fit analysis configuration
+ */
+export const JOB_FIT_CONFIG = {
+  CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours in ms
+  DWELL_DELAY_MS: 3000,             // 3s debounce before analysis fires
 } as const;
 
 /**
@@ -67,6 +77,8 @@ export const DEFAULT_SETTINGS = {
   showNotifications: true,
   analyticsOptOut: false,
   fullSiteAccess: false,
+  autoAnalysis: true,
+  badgeDisplay: "score" as "score" | "indicator" | "off",
 } as const;
 
 /**
