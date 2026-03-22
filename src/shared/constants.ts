@@ -55,7 +55,7 @@ export const ICON_STATES = {
  * Analytics configuration
  */
 export const ANALYTICS_CONFIG = {
-  POSTHOG_KEY: "", // To be configured
+  POSTHOG_KEY: "phc_bM8tEi7i4wnNriDktLmbqdkWPQeqFAnaMYHrpkBi73E",
   POSTHOG_HOST: "https://app.posthog.com",
 } as const;
 
