@@ -2,7 +2,7 @@
  * API client for AppTrack backend
  */
 
-import type { ApiError } from "@/shared/types";
+import type { ApiError, JobFitResult } from "@/shared/types";
 import { API_CONFIG } from "@/shared/constants";
 import { storage } from "./storage";
 
@@ -192,6 +192,25 @@ export const api = {
     return request(API_CONFIG.ENDPOINTS.VALIDATE_TOKEN, {
       method: "GET",
       retry: false,
+    });
+  },
+
+  /**
+   * Run job fit analysis against the user's default resume
+   */
+  async jobFit(data: {
+    jobDescription: string;
+    jobTitle?: string;
+    company?: string;
+  }): Promise<JobFitResult> {
+    return request<JobFitResult>(API_CONFIG.ENDPOINTS.JOB_FIT, {
+      method: "POST",
+      body: JSON.stringify({
+        jobDescription: data.jobDescription,
+        jobTitle: data.jobTitle,
+        company: data.company,
+        source: "extension-auto",
+      }),
     });
   },
 };
