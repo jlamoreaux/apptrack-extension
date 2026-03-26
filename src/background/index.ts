@@ -886,9 +886,7 @@ async function handleSaveApplication(
 /**
  * Check if a job is already tracked by company and role
  */
-async function handleCheckDuplicate(
-  payload: unknown
-): Promise<{
+async function handleCheckDuplicate(payload: unknown): Promise<{
   success: boolean;
   data?: { exists: boolean; applicationId?: string };
   error?: string;
@@ -918,9 +916,7 @@ async function handleCheckDuplicate(
 /**
  * Get job fit state for the active (or sender) tab
  */
-async function handleGetJobFit(
-  tabId?: number
-): Promise<{
+async function handleGetJobFit(tabId?: number): Promise<{
   success: boolean;
   data?: { status: JobFitStatus; result?: JobFitResult };
   error?: string;
