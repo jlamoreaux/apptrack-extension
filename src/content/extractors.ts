@@ -117,16 +117,22 @@ function extractFromGreenhouse(): JobData | null {
     // Salary: scan paragraphs for dollar amount patterns
     const salary = extractSalaryFromDom();
 
-    // Description: get the main content area text
+    // Description: grab the first substantial content section after the job header.
+    // Look for sections containing paragraphs/lists (typical job description blocks),
+    // regardless of heading text.
     let description: string | null = null;
-    const contentSections = document.querySelectorAll("h2");
-    for (const heading of contentSections) {
-      if (heading.textContent?.includes("About the role") || heading.textContent?.includes("About Anthropic")) {
-        const section = heading.parentElement;
-        if (section) {
-          description = section.textContent?.trim()?.substring(0, 5000) ?? null;
-          break;
-        }
+    const h1Parent = h1?.closest("section, article, div");
+    const allSections = document.querySelectorAll("section, article, div > h2, div > h3");
+    for (const node of allSections) {
+      // Skip the header section itself
+      if (h1Parent && (node === h1Parent || h1Parent.contains(node))) continue;
+      const container = node.tagName === "H2" || node.tagName === "H3" ? node.parentElement : node;
+      if (!container) continue;
+      const hasParagraphs = container.querySelectorAll("p, ul, ol").length >= 1;
+      const text = container.textContent?.trim();
+      if (hasParagraphs && text && text.length > 100) {
+        description = text.substring(0, 5000);
+        break;
       }
     }
 
@@ -327,9 +333,11 @@ function extractLocationNearTitle(): string | null {
   if (sibling && (sibling.tagName === "P" || sibling.tagName === "DIV")) {
     const text = sibling.textContent?.trim();
     if (text && text.length < 200) {
-      // Look for location-like patterns (contains city/state/country or "Remote")
-      const locationPattern = /(?:remote|united states|usa|canada|uk|europe|san francisco|new york|london|seattle|austin|chicago|los angeles|boston|denver|atlanta|portland|dallas|houston|phoenix|philadelphia|miami|washington|berlin|paris|tokyo|sydney|toronto|vancouver|bangalore|singapore)/i;
-      if (locationPattern.test(text)) {
+      // Generic location heuristic: match "Remote" or comma-separated patterns
+      // like "City, State", "City, Country", "City, ST" (2-letter abbreviation)
+      const hasRemote = /\bremote\b/i.test(text);
+      const hasCityStatePattern = /[A-Z][a-zA-Z\s]+,\s*[A-Z][a-zA-Z\s]+/.test(text);
+      if (hasRemote || hasCityStatePattern) {
         return text;
       }
     }
@@ -363,7 +371,7 @@ function extractCompanyFromPageTitle(): string | null {
   // "... at Company" (Greenhouse pattern: "Job Application for Role at Company")
   const atMatch = title.match(/\bat\s+([^|–—-]+?)\s*$/i);
   if (atMatch?.[1]) {
-    return atMatch[1].trim();
+    return stripCompanySuffixes(atMatch[1].trim());
   }
 
   // "Role - Company" or "Role | Company"
@@ -372,11 +380,21 @@ function extractCompanyFromPageTitle(): string | null {
     const candidate = separatorMatch[1].trim();
     // Avoid returning generic suffixes like "Careers" or "Jobs"
     if (candidate.length > 1 && !/^(careers|jobs|hiring)$/i.test(candidate)) {
-      return candidate;
+      return stripCompanySuffixes(candidate);
     }
   }
 
   return null;
+}
+
+/**
+ * Strip common job board suffixes from a company name.
+ * e.g., "Canva Careers" -> "Canva", "Google Jobs" -> "Google"
+ */
+function stripCompanySuffixes(name: string): string {
+  const suffixPattern = /\s+(?:Careers|Career|Jobs|Job Board|Hiring|Work|Team)$/i;
+  const stripped = name.replace(suffixPattern, "").trim();
+  return stripped.length > 0 ? stripped : name;
 }
 
 /**

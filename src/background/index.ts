@@ -151,7 +151,9 @@ browser.runtime.onStartup.addListener(async () => {
 // ============================================================================
 
 /**
- * Update the extension icon: greyed out when logged out, full color when authenticated
+ * Update the extension icon: greyed out when logged out, full color when authenticated.
+ * Uses chrome.action directly instead of the browser polyfill because
+ * webextension-polyfill doesn't properly type or polyfill setIcon/setBadgeText.
  */
 async function updateIconState(state: IconState, tabId?: number): Promise<void> {
   try {
