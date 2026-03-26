@@ -7,10 +7,10 @@ interface LogoProps {
   showText?: boolean;
 }
 
-const sizes = {
-  sm: "w-6 h-6",
-  md: "w-8 h-8",
-  lg: "w-10 h-10",
+const imgSizes = {
+  sm: 24,
+  md: 32,
+  lg: 40,
 };
 
 const textSizes = {
@@ -20,22 +20,16 @@ const textSizes = {
 };
 
 export function Logo({ size = "md", showText = true }: LogoProps) {
+  const px = imgSizes[size];
   return (
     <div className="flex items-center gap-2">
-      <svg
-        className={sizes[size]}
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect width="48" height="48" rx="10" className="fill-brand-500" />
-        <path
-          d="M14 24h20M24 14v20"
-          stroke="white"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-      </svg>
+      <img
+        src={chrome.runtime.getURL("icons/icon-128.png")}
+        alt="AppTrack"
+        width={px}
+        height={px}
+        className="rounded-lg"
+      />
       {showText && (
         <span className={`font-semibold text-gray-900 ${textSizes[size]}`}>
           AppTrack

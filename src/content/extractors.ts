@@ -16,7 +16,7 @@ export function extractJobData(): JobData {
     return jsonLdData;
   }
 
-  // Try embedded app data (Greenhouse Remix, etc.)
+  // Try embedded app data (Greenhouse DOM, Lever, etc.)
   const appData = extractFromEmbeddedAppData();
   if (appData) {
     return appData;
@@ -94,62 +94,48 @@ export function extractFromEmbeddedAppData(): JobData | null {
  */
 function extractFromGreenhouse(): JobData | null {
   try {
-    // Greenhouse uses Remix — job data is in window.__remixContext
-    const remixContext = (window as unknown as Record<string, unknown>).__remixContext as Record<string, unknown> | undefined;
-    if (!remixContext) return null;
+    // Greenhouse clears __remixContext after hydration, so we use DOM extraction
+    const title = document.querySelector("h1")?.textContent?.trim() ?? null;
+    if (!title) return null;
 
-    const state = remixContext.state as Record<string, unknown> | undefined;
-    const loaderData = state?.loaderData as Record<string, unknown> | undefined;
-    if (!loaderData) return null;
+    // Company from page title ("Job Application for Role at Company")
+    const company = extractCompanyFromPageTitle() ?? extractCompanyFromUrl();
 
-    // Find the route data containing the job post
-    const routeData = Object.values(loaderData).find(
-      (v) => v && typeof v === "object" && "jobPost" in (v as Record<string, unknown>)
-    ) as Record<string, unknown> | undefined;
-    if (!routeData) return null;
-
-    const jobPost = routeData.jobPost as Record<string, unknown>;
-    if (!jobPost) return null;
-
-    // Extract salary from pay_ranges or content
-    let salary: string | null = null;
-    const payRanges = jobPost.pay_ranges as Array<Record<string, unknown>> | undefined;
-    if (payRanges && payRanges.length > 0) {
-      const range = payRanges[0]!;
-      const min = range.min_value as string | undefined;
-      const max = range.max_value as string | undefined;
-      const currency = (range.currency_type as string) ?? "USD";
-      if (min && max) {
-        salary = `${currency} ${min} - ${max}`;
-      } else if (min) {
-        salary = `${currency} ${min}+`;
+    // Location is next to the h1 in the job header
+    const h1 = document.querySelector("h1");
+    const locationEl = h1?.parentElement?.querySelector("div:not(:has(h1))")
+      ?? h1?.parentElement?.parentElement?.querySelector('[class*="location"]');
+    let location: string | null = null;
+    if (locationEl) {
+      // Get text but skip any img alt text
+      const locText = locationEl.textContent?.trim();
+      if (locText && locText.length < 200) {
+        location = locText;
       }
     }
 
-    // Fall back to extracting salary from content HTML
-    if (!salary) {
-      salary = extractSalaryFromHtml(jobPost.content as string | undefined);
-    }
+    // Salary: scan paragraphs for dollar amount patterns
+    const salary = extractSalaryFromDom();
 
-    // Extract company name from boardConfiguration or URL
-    let company: string | null = (jobPost.company_name as string) ?? null;
-    if (!company) {
-      const boardConfig = routeData.boardConfiguration as Record<string, unknown> | undefined;
-      const boardName = boardConfig?.name as string | undefined;
-      if (boardName) {
-        company = boardName;
+    // Description: get the main content area text
+    let description: string | null = null;
+    const contentSections = document.querySelectorAll("h2");
+    for (const heading of contentSections) {
+      if (heading.textContent?.includes("About the role") || heading.textContent?.includes("About Anthropic")) {
+        const section = heading.parentElement;
+        if (section) {
+          description = section.textContent?.trim()?.substring(0, 5000) ?? null;
+          break;
+        }
       }
-    }
-    if (!company) {
-      company = extractCompanyFromUrl();
     }
 
     return {
-      title: (jobPost.title as string) ?? null,
+      title,
       company,
       url: window.location.href,
-      description: stripHtml(jobPost.content as string | undefined),
-      location: (jobPost.job_post_location as string) ?? null,
+      description,
+      location,
       salary,
       jobType: null,
       postedDate: null,
@@ -157,6 +143,22 @@ function extractFromGreenhouse(): JobData | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Scan DOM paragraphs for salary/compensation patterns
+ */
+function extractSalaryFromDom(): string | null {
+  const salaryPattern = /\$[\d,]+(?:\.\d{2})?(?:\s*[-–—]\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:USD|CAD|GBP|EUR|per\s+\w+))?/i;
+  const paragraphs = document.querySelectorAll("p");
+  for (const p of paragraphs) {
+    const text = p.textContent?.trim();
+    if (text && salaryPattern.test(text)) {
+      const match = text.match(salaryPattern);
+      if (match) return match[0];
+    }
+  }
+  return null;
 }
 
 /**
@@ -212,13 +214,42 @@ export function extractFromMetaTags(): JobData {
     return el?.getAttribute("content") ?? null;
   };
 
+  let company = getMeta("og:site_name") ?? null;
+  let location: string | null = null;
+  const ogDescription = getMeta("og:description") ?? getMeta("description") ?? null;
+
+  // Parse company from page title pattern "... at {Company}" or "... - {Company}"
+  if (!company) {
+    company = extractCompanyFromPageTitle();
+  }
+
+  // On Greenhouse pages, og:description is often the location string
+  const hostname = window.location.hostname;
+  if (hostname.includes("greenhouse.io") && ogDescription && !ogDescription.includes(".")) {
+    location = ogDescription;
+  }
+
+  // Prefer h1 over generic og:title/page titles like "Job Details | Company"
+  const ogTitle = getMeta("og:title");
+  const h1Title = document.querySelector("h1")?.textContent?.trim() ?? null;
+  const title = (h1Title && h1Title.length < 200 ? h1Title : null)
+    ?? ogTitle
+    ?? document.title
+    ?? null;
+
+  // Try DOM-based fallbacks for location and salary
+  if (!location) {
+    location = extractLocationNearTitle();
+  }
+  const salary = extractSalaryFromDom();
+
   return {
-    title: getMeta("og:title") ?? document.title ?? null,
-    company: getMeta("og:site_name") ?? null,
+    title,
+    company,
     url: window.location.href,
-    description: getMeta("og:description") ?? getMeta("description") ?? null,
-    location: null,
-    salary: null,
+    description: location === ogDescription ? null : ogDescription,
+    location,
+    salary,
   };
 }
 
@@ -265,9 +296,13 @@ export function extractFromHeuristics(): JobData {
   ];
 
   const title = findFirstText(titleSelectors);
-  const company = findFirstText(companySelectors) ?? extractCompanyFromUrl();
-  const location = findFirstText(locationSelectors);
-  const salary = findFirstText(salarySelectors);
+  const company = findFirstText(companySelectors)
+    ?? extractCompanyFromPageTitle()
+    ?? extractCompanyFromUrl();
+
+  // Try CSS selectors first, then fall back to DOM scanning
+  const location = findFirstText(locationSelectors) ?? extractLocationNearTitle();
+  const salary = findFirstText(salarySelectors) ?? extractSalaryFromDom();
 
   return {
     title,
@@ -277,6 +312,30 @@ export function extractFromHeuristics(): JobData {
     location,
     salary,
   };
+}
+
+/**
+ * Try to extract location from a subtitle/paragraph near the h1
+ * Many career pages put "Department | Location | Remote" right after the title
+ */
+function extractLocationNearTitle(): string | null {
+  const h1 = document.querySelector("h1");
+  if (!h1) return null;
+
+  // Check the next sibling paragraph
+  const sibling = h1.nextElementSibling;
+  if (sibling && (sibling.tagName === "P" || sibling.tagName === "DIV")) {
+    const text = sibling.textContent?.trim();
+    if (text && text.length < 200) {
+      // Look for location-like patterns (contains city/state/country or "Remote")
+      const locationPattern = /(?:remote|united states|usa|canada|uk|europe|san francisco|new york|london|seattle|austin|chicago|los angeles|boston|denver|atlanta|portland|dallas|houston|phoenix|philadelphia|miami|washington|berlin|paris|tokyo|sydney|toronto|vancouver|bangalore|singapore)/i;
+      if (locationPattern.test(text)) {
+        return text;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -290,6 +349,33 @@ export function findFirstText(selectors: string[]): string | null {
       return text;
     }
   }
+  return null;
+}
+
+/**
+ * Extract company name from common page title patterns
+ * e.g. "Job Application for Role at Company" or "Role - Company"
+ */
+function extractCompanyFromPageTitle(): string | null {
+  const title = document.title;
+  if (!title) return null;
+
+  // "... at Company" (Greenhouse pattern: "Job Application for Role at Company")
+  const atMatch = title.match(/\bat\s+([^|–—-]+?)\s*$/i);
+  if (atMatch?.[1]) {
+    return atMatch[1].trim();
+  }
+
+  // "Role - Company" or "Role | Company"
+  const separatorMatch = title.match(/[-|–—]\s*([^-|–—]+?)\s*$/);
+  if (separatorMatch?.[1]) {
+    const candidate = separatorMatch[1].trim();
+    // Avoid returning generic suffixes like "Careers" or "Jobs"
+    if (candidate.length > 1 && !/^(careers|jobs|hiring)$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+
   return null;
 }
 
@@ -333,34 +419,6 @@ function formatCompanySlug(slug: string): string {
   return slug
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/**
- * Extract salary information from HTML content
- */
-function extractSalaryFromHtml(html: string | undefined): string | null {
-  if (!html) return null;
-
-  // Match common salary patterns: $100,000, $100k, $100,000 - $150,000
-  const salaryPattern = /\$[\d,]+(?:\.\d{2})?(?:\s*k)?(?:\s*[-–—to]+\s*\$[\d,]+(?:\.\d{2})?(?:\s*k)?)?/gi;
-  const matches = html.match(salaryPattern);
-
-  if (matches && matches.length > 0) {
-    // Return the first match (usually the primary range)
-    return matches[0];
-  }
-
-  return null;
-}
-
-/**
- * Strip HTML tags and return plain text
- */
-function stripHtml(html: string | undefined): string | null {
-  if (!html) return null;
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const text = doc.body.textContent?.trim();
-  return text && text.length > 0 ? text : null;
 }
 
 /**

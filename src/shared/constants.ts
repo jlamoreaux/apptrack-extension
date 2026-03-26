@@ -3,10 +3,15 @@
  */
 
 /**
+ * Base URL for the AppTrack web app (canonical domain)
+ */
+export const APP_URL = "https://www.apptrack.ing";
+
+/**
  * API configuration
  */
 export const API_CONFIG = {
-  BASE_URL: "https://apptrack.ing/api",
+  BASE_URL: `${APP_URL}/api`,
   ENDPOINTS: {
     AUTH_TOKEN: "/auth/extension-token",
     REFRESH_TOKEN: "/auth/refresh-extension-token",
@@ -27,6 +32,7 @@ export const STORAGE_KEYS = {
   PENDING_SAVES: "apptrack_pending_saves",
   SETTINGS: "apptrack_settings",
   ANALYTICS_OPT_OUT: "apptrack_analytics_opt_out",
+  BANNER_DISMISSED: "apptrack_banner_dismissed",
 } as const;
 
 /**
@@ -47,8 +53,6 @@ export const TOKEN_CONFIG = {
 export const ICON_STATES = {
   DEFAULT: "gray",
   AUTHENTICATED: "blue",
-  JOB_DETECTED: "green",
-  ALREADY_TRACKED: "yellow",
 } as const;
 
 /**
