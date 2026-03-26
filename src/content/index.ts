@@ -201,8 +201,8 @@ function showDismissOptions(): void {
   onceBtn.addEventListener("click", () => removeBanner());
 
   const foreverBtn = el("button", { class: "apptrack-btn-secondary" }, ["Don't show again"]);
-  foreverBtn.addEventListener("click", async () => {
-    await browser.storage.local.set({ [STORAGE_KEYS.BANNER_DISMISSED]: true });
+  foreverBtn.addEventListener("click", () => {
+    void browser.storage.local.set({ [STORAGE_KEYS.BANNER_DISMISSED]: true });
     removeBanner();
   });
 
@@ -229,12 +229,12 @@ function showJobDetectedToast(jobData: JobData): void {
   ]);
 
   const saveBtn = el("button", { class: "apptrack-btn-primary" }, ["Save"]);
-  saveBtn.addEventListener("click", async () => {
+  saveBtn.addEventListener("click", () => { void (async () => {
     saveBtn.textContent = "Saving...";
     saveBtn.setAttribute("disabled", "true");
     saveBtn.style.opacity = "0.7";
     try {
-      const response = (await browser.runtime.sendMessage({
+      const response: { success?: boolean } = await browser.runtime.sendMessage({
         type: "SAVE_APPLICATION",
         payload: {
           jobTitle: jobData.title,
@@ -244,7 +244,7 @@ function showJobDetectedToast(jobData: JobData): void {
           location: jobData.location ?? undefined,
           salary: jobData.salary ?? undefined,
         },
-      })) as { success?: boolean };
+      });
 
       if (response?.success) {
         showSavedConfirmation();
@@ -254,7 +254,7 @@ function showJobDetectedToast(jobData: JobData): void {
     } catch {
       showSaveError(saveBtn);
     }
-  });
+  })(); });
 
   const inner = el("div", { class: "apptrack-inner" }, [makeIcon(), textSpan, saveBtn, makeCloseBtn()]);
   document.body.appendChild(el("div", { id: BANNER_ID }, [inner]));
@@ -308,9 +308,9 @@ async function initialize(): Promise<void> {
   // Check auth state
   let isAuthenticated = false;
   try {
-    const response = (await browser.runtime.sendMessage({
+    const response: { success?: boolean; data?: { isAuthenticated: boolean } } = await browser.runtime.sendMessage({
       type: "GET_AUTH_STATE",
-    })) as { success?: boolean; data?: { isAuthenticated: boolean } };
+    });
     isAuthenticated = response?.success === true && response.data?.isAuthenticated === true;
   } catch {
     return;
@@ -333,10 +333,10 @@ async function initialize(): Promise<void> {
 
   // Skip if already tracked
   try {
-    const dupResponse = (await browser.runtime.sendMessage({
+    const dupResponse: { success?: boolean; data?: { exists: boolean } } = await browser.runtime.sendMessage({
       type: "CHECK_DUPLICATE",
       payload: { company: jobData.company, role: jobData.title },
-    })) as { success?: boolean; data?: { exists: boolean } };
+    });
     if (dupResponse?.success && dupResponse.data?.exists) return;
   } catch {
     // Continue even if duplicate check fails
@@ -361,6 +361,6 @@ browser.runtime.onMessage.addListener(
   }
 );
 
-initialize();
+void initialize();
 
 export {};

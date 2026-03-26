@@ -22,6 +22,7 @@ export async function initAnalytics(): Promise<void> {
 
   if (!isOptedOut && ANALYTICS_CONFIG.POSTHOG_KEY) {
     // PostHog would be initialized here in production
+    // eslint-disable-next-line no-console
     console.log("[AppTrack Analytics] Initialized");
   }
 }
@@ -41,6 +42,7 @@ export async function track(event: string, properties?: Record<string, unknown>)
   // Sanitize properties - remove any potential PII
   const sanitizedProps = sanitizeProperties(properties);
 
+  // eslint-disable-next-line no-console
   console.log("[AppTrack Analytics] Track:", event, sanitizedProps);
 
   // In production, this would send to PostHog:

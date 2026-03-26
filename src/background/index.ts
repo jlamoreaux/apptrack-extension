@@ -130,19 +130,22 @@ function isExtensionPage(sender: browser.Runtime.MessageSender): boolean {
 // ============================================================================
 
 // Initialize on install
-browser.runtime.onInstalled.addListener(async (details) => {
+browser.runtime.onInstalled.addListener((details) => {
+  // eslint-disable-next-line no-console
   console.log("[AppTrack] Extension installed:", details.reason);
 
   // Set default icon state
-  await updateIconState(ICON_STATES.DEFAULT);
-
-  // Setup token refresh alarm if authenticated
-  await setupTokenRefreshAlarm();
+  void (async () => {
+    await updateIconState(ICON_STATES.DEFAULT);
+    await setupTokenRefreshAlarm();
+  })();
 });
 
 // Initialize on startup
-browser.runtime.onStartup.addListener(async () => {
+browser.runtime.onStartup.addListener(() => {
+  // eslint-disable-next-line no-console
   console.log("[AppTrack] Extension started");
+  void (async () => {
 
   // Restore icon state based on auth
   const authState = await storage.getAuthState();
@@ -166,6 +169,7 @@ browser.runtime.onStartup.addListener(async () => {
     // Permission was revoked externally — sync settings
     await storage.setSettings({ fullSiteAccess: false });
   }
+  })();
 });
 
 // ============================================================================
@@ -253,7 +257,7 @@ async function updateTabIcon(tabId: number): Promise<void> {
 /**
  * Schedule auto job fit analysis for a tab, with 3s debounce.
  */
-async function scheduleJobFitAnalysis(tabId: number, jobData: JobData): Promise<void> {
+function scheduleJobFitAnalysis(tabId: number, jobData: JobData): void {
   // Clear any existing timer for this tab
   const existing = jobFitTimers.get(tabId);
   if (existing) clearTimeout(existing);
@@ -363,9 +367,9 @@ async function setupTokenRefreshAlarm(): Promise<void> {
 /**
  * Handle alarm events
  */
-browser.alarms.onAlarm.addListener(async (alarm) => {
+browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TOKEN_CONFIG.REFRESH_ALARM_NAME) {
-    await refreshAuthToken();
+    void refreshAuthToken();
   }
 });
 
@@ -378,6 +382,7 @@ async function refreshAuthToken(): Promise<boolean> {
     const authState = await storage.getAuthState();
 
     if (!authState.token) {
+      // eslint-disable-next-line no-console
       console.log("[AppTrack] No token available for refresh");
       await handleLogout();
       return false;
@@ -405,6 +410,7 @@ async function refreshAuthToken(): Promise<boolean> {
     // Setup next refresh alarm
     await setupTokenRefreshAlarm();
 
+    // eslint-disable-next-line no-console
     console.log("[AppTrack] Token refreshed successfully");
     return true;
   } catch (error) {
@@ -435,7 +441,8 @@ async function handleLogout(): Promise<void> {
 /**
  * Listen for tab updates to detect job pages
  */
-browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  void (async () => {
   // Only act on complete page loads with a URL
   if (changeInfo.status !== "complete" || !tab.url) {
     return;
@@ -456,9 +463,9 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   // Try to extract job data from the page
   try {
-    const response = (await browser.tabs.sendMessage(tabId, {
+    const response: { success?: boolean; data?: JobData } | undefined = await browser.tabs.sendMessage(tabId, {
       type: "EXTRACT_JOB_DATA",
-    })) as { success?: boolean; data?: JobData } | undefined;
+    });
 
     if (response?.success && response.data) {
       const jobData = response.data;
@@ -481,7 +488,7 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
         tabStates.set(tabId, { hasJob: true, jobData, isDuplicate });
         await updateTabIcon(tabId);
-        await scheduleJobFitAnalysis(tabId, jobData);
+        scheduleJobFitAnalysis(tabId, jobData);
         return;
       } else {
         tabStates.set(tabId, { hasJob: false });
@@ -495,13 +502,14 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 
   await updateTabIcon(tabId);
+  })();
 });
 
 /**
  * Listen for tab activation to update icon
  */
-browser.tabs.onActivated.addListener(async (activeInfo) => {
-  await updateTabIcon(activeInfo.tabId);
+browser.tabs.onActivated.addListener((activeInfo) => {
+  void updateTabIcon(activeInfo.tabId);
 });
 
 /**
@@ -640,6 +648,7 @@ async function processPendingSaves(): Promise<void> {
   for (const item of pending) {
     try {
       await api.saveApplication(item.data);
+      // eslint-disable-next-line no-console
       console.log("[AppTrack] Processed pending save:", item.id);
     } catch (error) {
       // Keep in queue if network error, discard if 4xx
@@ -794,9 +803,9 @@ async function handleGetJobData(
     }
 
     // Fetch fresh data
-    const response = (await browser.tabs.sendMessage(targetTabId, {
+    const response: { success?: boolean; data?: JobData } | undefined = await browser.tabs.sendMessage(targetTabId, {
       type: "EXTRACT_JOB_DATA",
-    })) as { success?: boolean; data?: JobData } | undefined;
+    });
 
     if (response?.success && response.data) {
       return { success: true, data: response.data };
@@ -925,6 +934,7 @@ async function handleGetJobFit(
 // Process pending saves when coming back online
 if (typeof navigator !== "undefined" && "onLine" in navigator) {
   self.addEventListener("online", () => {
+    // eslint-disable-next-line no-console
     console.log("[AppTrack] Back online, processing pending saves");
     processPendingSaves().catch(console.error);
   });

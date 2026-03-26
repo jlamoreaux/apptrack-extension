@@ -149,7 +149,8 @@ describe("Auth State Management", () => {
 describe("Token Refresh", () => {
   it("should refresh token using Authorization header (no args)", async () => {
     const { api } = await import("@/shared/utils/api");
-    const mockRefreshToken = vi.mocked(api.refreshToken);
+    const mockRefreshToken = vi.fn();
+    api.refreshToken = mockRefreshToken;
 
     const mockResponse = {
       token: "new-access-token",
@@ -166,7 +167,8 @@ describe("Token Refresh", () => {
 
   it("should handle expired token", async () => {
     const { api, ApiClientError } = await import("@/shared/utils/api");
-    const mockRefreshToken = vi.mocked(api.refreshToken);
+    const mockRefreshToken = vi.fn();
+    api.refreshToken = mockRefreshToken;
 
     mockRefreshToken.mockRejectedValue(
       new ApiClientError("Token expired", "TOKEN_EXPIRED", 401)

@@ -126,14 +126,14 @@ async function handleCallback(): Promise<void> {
     }
 
     // Send auth data to background worker (background validates expiresAt)
-    const response = (await browser.runtime.sendMessage({
+    const response: { success?: boolean; error?: string } | undefined = await browser.runtime.sendMessage({
       type: "SET_AUTH_STATE",
       payload: {
         token: authParams.token,
         expiresAt,
         userId: authParams.userId,
       },
-    })) as { success?: boolean; error?: string } | undefined;
+    });
 
     if (!response?.success) {
       throw new Error(response?.error ?? "Failed to save authentication");
@@ -169,5 +169,5 @@ function updateTryAgainLink(): void {
 // Run on page load
 document.addEventListener("DOMContentLoaded", () => {
   updateTryAgainLink();
-  handleCallback();
+  void handleCallback();
 });

@@ -18,7 +18,7 @@ import {
  * Uses innerHTML for test-only static strings in jsdom — no XSS risk.
  */
 function setDocumentContent(html: string) {
-  document.documentElement.innerHTML = html; // eslint-disable-line no-unsanitized/property
+  document.documentElement.innerHTML = html; // test-only static HTML in jsdom
 }
 
 describe("extractFromJsonLd", () => {

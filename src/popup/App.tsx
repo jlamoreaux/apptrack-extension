@@ -202,7 +202,7 @@ function AppContent() {
 
   // Initialize on mount
   useEffect(() => {
-    initialize();
+    void initialize();
   }, [initialize]);
 
   // Listen for auth state changes (e.g., after user signs in from web app)
@@ -213,7 +213,7 @@ function AppContent() {
     ) => {
       if (areaName === "local" && changes[STORAGE_KEYS.AUTH_STATE]) {
         // Auth state changed, re-initialize
-        initialize();
+        void initialize();
       }
     };
 
@@ -414,7 +414,7 @@ function LoggedOutView() {
     const extensionId = chrome.runtime.id;
     const callbackUrl = new URL(`${APP_URL}/auth/extension-callback`);
     callbackUrl.searchParams.set("extensionId", extensionId);
-    chrome.tabs.create({ url: callbackUrl.toString() });
+    void chrome.tabs.create({ url: callbackUrl.toString() });
   };
 
   return (
@@ -432,7 +432,7 @@ function LoggedOutView() {
         Sign in to AppTrack
       </Button>
       <p className="text-xs text-gray-400 mt-4">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <button
           onClick={() => chrome.tabs.create({ url: `${APP_URL}/signup` })}
           className="text-brand-500 hover:text-brand-600"
