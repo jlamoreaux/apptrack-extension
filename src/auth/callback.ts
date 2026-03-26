@@ -5,6 +5,7 @@
  */
 
 import browser from "webextension-polyfill";
+import { APP_URL } from "@/shared/constants";
 
 interface DirectAuthParams {
   type: "direct";
@@ -159,7 +160,7 @@ function updateTryAgainLink(): void {
   const tryAgainLink = document.querySelector('a.btn[href*="extension-callback"]');
   if (tryAgainLink) {
     const extensionId = browser.runtime.id;
-    const url = new URL("https://apptrack.ing/auth/extension-callback");
+    const url = new URL(`${APP_URL}/auth/extension-callback`);
     url.searchParams.set("extensionId", extensionId);
     tryAgainLink.setAttribute("href", url.toString());
   }

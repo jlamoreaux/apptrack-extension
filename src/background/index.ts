@@ -169,46 +169,43 @@ browser.runtime.onStartup.addListener(async () => {
 });
 
 // ============================================================================
-// Icon Badge Management
+// Icon Management
 // ============================================================================
 
 /**
- * Update the extension icon based on state
+ * Update the extension icon: greyed out when logged out, full color when authenticated.
+ * Uses chrome.action directly instead of the browser polyfill because
+ * webextension-polyfill doesn't properly type or polyfill setIcon/setBadgeText.
  */
 async function updateIconState(state: IconState, tabId?: number): Promise<void> {
-  const badgeColors: Record<IconState, string> = {
-    [ICON_STATES.DEFAULT]: "#9CA3AF", // gray-400
-    [ICON_STATES.AUTHENTICATED]: "#3B82F6", // blue-500
-    [ICON_STATES.JOB_DETECTED]: "#22C55E", // green-500
-    [ICON_STATES.ALREADY_TRACKED]: "#EAB308", // yellow-500
-  };
-
-  const badgeText: Record<IconState, string> = {
-    [ICON_STATES.DEFAULT]: "",
-    [ICON_STATES.AUTHENTICATED]: "",
-    [ICON_STATES.JOB_DETECTED]: "+",
-    [ICON_STATES.ALREADY_TRACKED]: "✓",
-  };
-
   try {
-    const options = tabId ? { tabId } : {};
+    const isActive = state !== ICON_STATES.DEFAULT;
+    const suffix = isActive ? "" : "-grey";
+    const path: Record<string, string> = {
+      "16": `icons/icon-16${suffix}.png`,
+      "48": `icons/icon-48${suffix}.png`,
+      "128": `icons/icon-128${suffix}.png`,
+    };
 
-    await browser.action.setBadgeBackgroundColor({
-      ...options,
-      color: badgeColors[state],
-    });
+    if (tabId) {
+      await chrome.action.setIcon({ path, tabId });
+    } else {
+      await chrome.action.setIcon({ path });
+    }
 
-    await browser.action.setBadgeText({
-      ...options,
-      text: badgeText[state],
-    });
+    // Clear any leftover badge text
+    if (tabId) {
+      await chrome.action.setBadgeText({ tabId, text: "" });
+    } else {
+      await chrome.action.setBadgeText({ text: "" });
+    }
   } catch (error) {
     console.error("[AppTrack] Error updating icon:", error);
   }
 }
 
 /**
- * Update icon for a specific tab based on job detection
+ * Update icon for a specific tab based on auth state
  */
 async function updateTabIcon(tabId: number): Promise<void> {
   const authState = await storage.getAuthState();
@@ -218,17 +215,16 @@ async function updateTabIcon(tabId: number): Promise<void> {
     return;
   }
 
+  // Set the base icon to active (full color)
+  await updateIconState(ICON_STATES.AUTHENTICATED, tabId);
+
   const tabState = tabStates.get(tabId);
+  if (!tabState?.hasJob) return;
 
-  if (!tabState?.hasJob) {
-    await updateIconState(ICON_STATES.AUTHENTICATED, tabId);
-    return;
-  }
-
-  // Job fit badge states take priority over the generic job-detected state
+  // Job fit badge states overlay on top of the active icon
   if (tabState.jobFitStatus === "loading") {
-    await browser.action.setBadgeText({ text: "...", tabId });
-    await browser.action.setBadgeBackgroundColor({ color: "#3B82F6", tabId }); // blue
+    await chrome.action.setBadgeText({ text: "...", tabId });
+    await chrome.action.setBadgeBackgroundColor({ color: "#3B82F6", tabId }); // blue
     return;
   }
 
@@ -238,22 +234,15 @@ async function updateTabIcon(tabId: number): Promise<void> {
       score >= 80 ? "#16a34a" : // green
       score >= 60 ? "#ca8a04" : // yellow
       "#6b7280";               // gray
-    await browser.action.setBadgeText({ text: String(score), tabId });
-    await browser.action.setBadgeBackgroundColor({ color, tabId });
+    await chrome.action.setBadgeText({ text: String(score), tabId });
+    await chrome.action.setBadgeBackgroundColor({ color, tabId });
     return;
   }
 
   if (tabState.jobFitStatus === "no_resume") {
-    await browser.action.setBadgeText({ text: "?", tabId });
-    await browser.action.setBadgeBackgroundColor({ color: "#9CA3AF", tabId });
+    await chrome.action.setBadgeText({ text: "?", tabId });
+    await chrome.action.setBadgeBackgroundColor({ color: "#9CA3AF", tabId });
     return;
-  }
-
-  // Default: show the generic job-detected or already-tracked state
-  if (tabState.isDuplicate) {
-    await updateIconState(ICON_STATES.ALREADY_TRACKED, tabId);
-  } else {
-    await updateIconState(ICON_STATES.JOB_DETECTED, tabId);
   }
 }
 
