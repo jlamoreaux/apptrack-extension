@@ -249,19 +249,26 @@ function showJobDetectedToast(jobData: JobData): void {
       if (response?.success) {
         showSavedConfirmation();
       } else {
-        saveBtn.textContent = "Save";
-        saveBtn.removeAttribute("disabled");
-        saveBtn.style.opacity = "1";
+        showSaveError(saveBtn);
       }
     } catch {
-      saveBtn.textContent = "Save";
-      saveBtn.removeAttribute("disabled");
-      saveBtn.style.opacity = "1";
+      showSaveError(saveBtn);
     }
   });
 
   const inner = el("div", { class: "apptrack-inner" }, [makeIcon(), textSpan, saveBtn, makeCloseBtn()]);
   document.body.appendChild(el("div", { id: BANNER_ID }, [inner]));
+}
+
+function showSaveError(saveBtn: HTMLButtonElement): void {
+  saveBtn.textContent = "Failed \u2014 Retry";
+  saveBtn.style.background = "#ef4444";
+  saveBtn.removeAttribute("disabled");
+  saveBtn.style.opacity = "1";
+  setTimeout(() => {
+    saveBtn.textContent = "Save";
+    saveBtn.style.background = "";
+  }, 2000);
 }
 
 function showSavedConfirmation(): void {

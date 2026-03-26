@@ -18,6 +18,7 @@ export const API_CONFIG = {
     VALIDATE_TOKEN: "/auth/validate",
     CHECK_DUPLICATE: "/applications/check-duplicate",
     APPLICATIONS: "/applications",
+    JOB_FIT: "/ai-coach/job-fit",
   },
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
@@ -33,6 +34,7 @@ export const STORAGE_KEYS = {
   SETTINGS: "apptrack_settings",
   ANALYTICS_OPT_OUT: "apptrack_analytics_opt_out",
   BANNER_DISMISSED: "apptrack_banner_dismissed",
+  JOB_FIT_CACHE: "apptrack_job_fit_cache",
 } as const;
 
 /**
@@ -48,6 +50,14 @@ export const TOKEN_CONFIG = {
 } as const;
 
 /**
+ * Job fit analysis configuration
+ */
+export const JOB_FIT_CONFIG = {
+  CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours in ms
+  DWELL_DELAY_MS: 3000,             // 3s debounce before analysis fires
+} as const;
+
+/**
  * Extension icon states
  */
 export const ICON_STATES = {
@@ -59,7 +69,7 @@ export const ICON_STATES = {
  * Analytics configuration
  */
 export const ANALYTICS_CONFIG = {
-  POSTHOG_KEY: "", // To be configured
+  POSTHOG_KEY: "phc_bM8tEi7i4wnNriDktLmbqdkWPQeqFAnaMYHrpkBi73E",
   POSTHOG_HOST: "https://app.posthog.com",
 } as const;
 
@@ -70,4 +80,59 @@ export const DEFAULT_SETTINGS = {
   autoDetect: true,
   showNotifications: true,
   analyticsOptOut: false,
+  fullSiteAccess: false,
+  autoAnalysis: true,
+  badgeDisplay: "score" as "score" | "indicator" | "off",
 } as const;
+
+/**
+ * Curated list of job board and ATS domains for the default content script.
+ * Covers the vast majority of job applications without requiring <all_urls>.
+ * Users can opt into full-site access via extension settings.
+ */
+export const JOB_BOARD_MATCHES = [
+  // Major job boards
+  "*://*.linkedin.com/jobs/*",
+  "*://*.indeed.com/*",
+  "*://*.glassdoor.com/*",
+  "*://*.ziprecruiter.com/*",
+  "*://*.monster.com/*",
+  "*://www.dice.com/*",
+  "*://*.simplyhired.com/*",
+  "*://wellfound.com/*",
+  "*://angel.co/*",
+  "*://*.hired.com/*",
+  "*://www.careerbuilder.com/*",
+  "*://*.handshake.com/*",
+  // ATS platforms (company career pages)
+  "*://boards.greenhouse.io/*",
+  "*://jobs.lever.co/*",
+  "*://*.myworkdayjobs.com/*",
+  "*://*.icims.com/*",
+  "*://*.taleo.net/*",
+  "*://*.bamboohr.com/*",
+  "*://*.smartrecruiters.com/*",
+  "*://*.jobvite.com/*",
+  "*://jobs.ashbyhq.com/*",
+  "*://apply.workable.com/*",
+  "*://*.breezy.hr/*",
+  "*://*.recruitee.com/*",
+  "*://*.applytojob.com/*",
+  "*://*.rippling.com/*",
+  "*://*.paylocity.com/*",
+  "*://*.successfactors.com/*",
+  "*://*.paycom.com/*",
+  // AppTrack itself
+  "*://apptrack.ing/*",
+  "*://*.apptrack.ing/*",
+] as const;
+
+/**
+ * ID used when dynamically registering the full-site content script.
+ */
+export const FULL_SITE_SCRIPT_ID = "apptrack-allurls-content";
+
+/**
+ * Optional host permission that enables the extension on all websites.
+ */
+export const FULL_SITE_ORIGIN = "<all_urls>";

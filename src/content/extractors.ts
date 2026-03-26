@@ -159,7 +159,7 @@ function extractSalaryFromDom(): string | null {
   const paragraphs = document.querySelectorAll("p");
   for (const p of paragraphs) {
     const text = p.textContent?.trim();
-    if (text && salaryPattern.test(text)) {
+    if (text) {
       const match = text.match(salaryPattern);
       if (match) return match[0];
     }

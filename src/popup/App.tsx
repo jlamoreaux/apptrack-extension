@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from "react";
-import type { ExtensionState, JobData, ApplicationPayload } from "@/shared/types";
+import type { ExtensionState, JobData, ApplicationPayload, JobFitStatus, JobFitResult } from "@/shared/types";
 import { messages } from "@/shared/utils/messaging";
 import { STORAGE_KEYS, APP_URL } from "@/shared/constants";
 import {
@@ -82,21 +82,30 @@ export default function App() {
 
 interface AppState {
   view: ExtensionState;
+  previousView: ExtensionState | null;
   loading: boolean;
   jobData: JobData | null;
   error: string | null;
   savedId: string | null;
   wasQueued: boolean;
+  fullSiteAccess: boolean;
+  autoAnalysis: boolean;
+  jobFitStatus: JobFitStatus;
+  jobFitResult?: JobFitResult;
 }
 
 function AppContent() {
   const [state, setState] = useState<AppState>({
     view: "logged_out",
+    previousView: null,
     loading: true,
     jobData: null,
     error: null,
     savedId: null,
     wasQueued: false,
+    fullSiteAccess: false,
+    autoAnalysis: true,
+    jobFitStatus: "idle",
   });
 
   // Guard to prevent concurrent initialization calls
@@ -121,11 +130,18 @@ function AppContent() {
         return;
       }
 
+      // Load full-site access status
+      const fullSiteAccess = await messages.getFullSiteStatus();
+
+      // Load settings (for autoAnalysis)
+      const settings = await chrome.storage.local.get("apptrack_settings");
+      const autoAnalysis = (settings["apptrack_settings"] as { autoAnalysis?: boolean } | null)?.autoAnalysis ?? true;
+
       // Fetch job data from current tab
       const jobResult = await messages.getJobData();
 
       if (!jobResult.success || !jobResult.data) {
-        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        setState((s) => ({ ...s, view: "no_job", fullSiteAccess, autoAnalysis, loading: false }));
         return;
       }
 
@@ -133,9 +149,12 @@ function AppContent() {
       const hasJob = !!(jobData.title || jobData.company);
 
       if (!hasJob) {
-        setState((s) => ({ ...s, view: "no_job", loading: false }));
+        setState((s) => ({ ...s, view: "no_job", fullSiteAccess, autoAnalysis, loading: false }));
         return;
       }
+
+      // Load job fit state
+      const jobFitData = await messages.getJobFit();
 
       // Check if already tracked
       const duplicateResult = await messages.checkDuplicate(
@@ -148,6 +167,10 @@ function AppContent() {
           ...s,
           view: "already_tracked",
           jobData,
+          fullSiteAccess,
+          autoAnalysis,
+          jobFitStatus: jobFitData.status,
+          jobFitResult: jobFitData.result,
           loading: false,
         }));
         return;
@@ -158,6 +181,10 @@ function AppContent() {
         ...s,
         view: "job_detected",
         jobData,
+        fullSiteAccess,
+        autoAnalysis,
+        jobFitStatus: jobFitData.status,
+        jobFitResult: jobFitData.result,
         loading: false,
       }));
     } catch (error) {
@@ -195,6 +222,25 @@ function AppContent() {
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
   }, [initialize]);
+
+  // Poll for job fit updates while analysis is loading
+  useEffect(() => {
+    if (state.jobFitStatus !== "loading") return;
+
+    const interval = setInterval(async () => {
+      const jobFitData = await messages.getJobFit();
+      if (jobFitData.status !== "loading") {
+        setState((s) => ({
+          ...s,
+          jobFitStatus: jobFitData.status,
+          jobFitResult: jobFitData.result,
+        }));
+        clearInterval(interval);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [state.jobFitStatus]);
 
   // Handle logout
   const handleLogout = useCallback(async () => {
@@ -248,6 +294,44 @@ function AppContent() {
     window.location.reload();
   }, []);
 
+  // Open settings view
+  const handleOpenSettings = useCallback(() => {
+    setState((s) => ({ ...s, previousView: s.view, view: "settings" }));
+  }, []);
+
+  // Close settings view, return to previous
+  const handleCloseSettings = useCallback(() => {
+    setState((s) => ({ ...s, view: s.previousView ?? "no_job", previousView: null }));
+  }, []);
+
+  // Toggle auto-analysis setting
+  const handleToggleAutoAnalysis = useCallback(async (enable: boolean) => {
+    // Use chrome.storage directly for simplicity (storage.setSettings merges)
+    const stored = await chrome.storage.local.get("apptrack_settings");
+    const current = (stored["apptrack_settings"] as Record<string, unknown>) ?? {};
+    await chrome.storage.local.set({ apptrack_settings: { ...current, autoAnalysis: enable } });
+    setState((s) => ({ ...s, autoAnalysis: enable }));
+  }, []);
+
+  // Toggle full-site access
+  const handleToggleFullSite = useCallback(async (enable: boolean) => {
+    if (enable) {
+      const result = await messages.enableFullSiteAccess();
+      if (result.success) {
+        setState((s) => ({ ...s, fullSiteAccess: true }));
+      }
+    } else {
+      const result = await messages.disableFullSiteAccess();
+      if (result.success) {
+        setState((s) => ({ ...s, fullSiteAccess: false }));
+      } else {
+        // Reconcile with actual permission state if disable failed
+        const actual = await messages.getFullSiteStatus();
+        setState((s) => ({ ...s, fullSiteAccess: actual }));
+      }
+    }
+  }, []);
+
   // Loading state
   if (state.loading && state.view === "logged_out") {
     return (
@@ -257,14 +341,32 @@ function AppContent() {
     );
   }
 
+  const showSettingsButton = state.view !== "logged_out" && state.view !== "settings";
+
   // Render based on view state
   return (
     <div className="w-80">
       <div className="p-4">
-        <Header
-          showLogout={state.view !== "logged_out"}
-          onLogout={handleLogout}
-        />
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <Header
+              showLogout={state.view !== "logged_out"}
+              onLogout={handleLogout}
+            />
+          </div>
+          {showSettingsButton && (
+            <button
+              onClick={handleOpenSettings}
+              className="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded"
+              title="Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         {state.view === "logged_out" && <LoggedOutView />}
         {state.view === "no_job" && <NoJobView />}
@@ -275,6 +377,8 @@ function AppContent() {
             error={state.error}
             onSave={handleSave}
             onUpdate={updateJobData}
+            jobFitStatus={state.jobFitStatus}
+            jobFitResult={state.jobFitResult}
           />
         )}
         {state.view === "already_tracked" && state.jobData && (
@@ -285,6 +389,15 @@ function AppContent() {
         )}
         {state.view === "error" && (
           <ErrorView message={state.error} onRetry={handleReset} />
+        )}
+        {state.view === "settings" && (
+          <SettingsView
+            fullSiteAccess={state.fullSiteAccess}
+            onToggleFullSite={handleToggleFullSite}
+            onBack={handleCloseSettings}
+            autoAnalysis={state.autoAnalysis}
+            onToggleAutoAnalysis={handleToggleAutoAnalysis}
+          />
         )}
       </div>
     </div>
@@ -358,12 +471,92 @@ function NoJobView() {
   );
 }
 
+interface JobFitSectionProps {
+  status: JobFitStatus;
+  result?: JobFitResult;
+}
+
+function JobFitSection({ status, result }: JobFitSectionProps) {
+  if (status === "idle") return null;
+
+  return (
+    <div className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+      <p className="text-xs font-medium text-gray-500 mb-2">Job Fit</p>
+
+      {status === "loading" && (
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="animate-spin h-3 w-3 border-2 border-brand-500 border-t-transparent rounded-full" />
+          <span>Analyzing your fit...</span>
+        </div>
+      )}
+
+      {status === "ready" && result && (
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className={`text-lg font-bold ${
+                result.overallScore >= 80 ? "text-green-600" :
+                result.overallScore >= 60 ? "text-yellow-600" :
+                "text-gray-500"
+              }`}
+            >
+              {result.overallScore}
+            </span>
+            <span className="text-xs text-gray-400">/ 100</span>
+          </div>
+          <p className="text-xs text-gray-600 leading-snug">{result.summary}</p>
+          <button
+            type="button"
+            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/ai-coach" })}
+            className="text-xs text-brand-500 hover:text-brand-600 mt-1 flex items-center gap-1"
+          >
+            Run with a different resume
+            <ExternalLinkIcon className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {status === "no_resume" && (
+        <div>
+          <p className="text-xs text-gray-600">Upload your resume to see your fit score.</p>
+          <button
+            type="button"
+            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/resumes" })}
+            className="text-xs text-brand-500 hover:text-brand-600 mt-1"
+          >
+            Upload resume →
+          </button>
+        </div>
+      )}
+
+      {status === "upgrade_required" && (
+        <div>
+          <p className="text-xs text-gray-600 mb-1">Upgrade to Pro to see your fit score.</p>
+          <button
+            type="button"
+            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/upgrade" })}
+            className="text-xs text-brand-500 hover:text-brand-600"
+          >
+            Upgrade to Pro →
+          </button>
+        </div>
+      )}
+
+      {status === "error" && (
+        <p className="text-xs text-gray-400">Analysis unavailable.</p>
+      )}
+    </div>
+  );
+}
+
 interface JobDetectedViewProps {
   jobData: JobData;
   loading: boolean;
   error: string | null;
   onSave: (data: ApplicationPayload) => void;
   onUpdate: (updates: Partial<JobData>) => void;
+  jobFitStatus: JobFitStatus;
+  jobFitResult?: JobFitResult;
 }
 
 function JobDetectedView({
@@ -372,6 +565,8 @@ function JobDetectedView({
   error,
   onSave,
   onUpdate,
+  jobFitStatus,
+  jobFitResult,
 }: JobDetectedViewProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -462,6 +657,9 @@ function JobDetectedView({
           />
         </div>
       )}
+
+      {/* Job Fit Section */}
+      <JobFitSection status={jobFitStatus} result={jobFitResult} />
 
       {/* Error Message */}
       {error && (
@@ -571,6 +769,100 @@ function ErrorView({ message, onRetry }: ErrorViewProps) {
       <Button variant="secondary" onClick={onRetry} className="w-full">
         Try Again
       </Button>
+    </div>
+  );
+}
+
+interface SettingsViewProps {
+  fullSiteAccess: boolean;
+  onToggleFullSite: (enable: boolean) => Promise<void>;
+  onBack: () => void;
+  autoAnalysis: boolean;
+  onToggleAutoAnalysis: (enable: boolean) => Promise<void>;
+}
+
+function SettingsView({ fullSiteAccess, onToggleFullSite, onBack, autoAnalysis, onToggleAutoAnalysis }: SettingsViewProps) {
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    try {
+      await onToggleFullSite(!fullSiteAccess);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  return (
+    <div className="py-2">
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={onBack}
+          className="p-1 text-gray-400 hover:text-gray-600 rounded"
+          title="Back"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 className="text-base font-semibold text-gray-900">Settings</h2>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3 py-3 border-b border-gray-100">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-900">Enable on all websites</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Detect job postings on any site, including company career pages not on the default list.
+              Chrome will ask for permission when you turn this on.
+            </p>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`relative flex-shrink-0 w-10 h-6 rounded-full transition-colors focus:outline-none ${
+              fullSiteAccess ? "bg-brand-500" : "bg-gray-200"
+            } ${toggling ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            role="switch"
+            aria-checked={fullSiteAccess}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                fullSiteAccess ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="flex items-start justify-between gap-3 py-3 border-b border-gray-100">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-900">Auto-analyze job fit</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Automatically show your fit score when you land on a job listing. Pro feature.
+            </p>
+          </div>
+          <button
+            onClick={() => onToggleAutoAnalysis(!autoAnalysis)}
+            className={`relative flex-shrink-0 w-10 h-6 rounded-full transition-colors focus:outline-none ${
+              autoAnalysis ? "bg-brand-500" : "bg-gray-200"
+            } cursor-pointer`}
+            role="switch"
+            aria-checked={autoAnalysis}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                autoAnalysis ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="pt-1">
+          <p className="text-xs text-gray-400">
+            Default list covers LinkedIn, Indeed, Greenhouse, Lever, Workday, and 20+ other job boards.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

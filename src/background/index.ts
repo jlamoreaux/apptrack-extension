@@ -10,8 +10,14 @@ import {
   ICON_STATES,
   TOKEN_CONFIG,
   STORAGE_KEYS,
+  FULL_SITE_SCRIPT_ID,
+  FULL_SITE_ORIGIN,
+  JOB_FIT_CONFIG,
 } from "@/shared/constants";
-import type { JobData, ApplicationPayload } from "@/shared/types";
+import type { JobData, ApplicationPayload, JobFitStatus, JobFitResult, JobFitCacheEntry } from "@/shared/types";
+// CRXJS resolves this to the correct built path at bundle time.
+// Using ?script ensures the path stays correct even if CRXJS adds content hashing.
+import contentScriptUrl from "../content/index.ts?script";
 
 // ============================================================================
 // Types
@@ -30,10 +36,15 @@ interface TabState {
   hasJob: boolean;
   jobData?: JobData;
   isDuplicate?: boolean;
+  jobFitStatus?: JobFitStatus;
+  jobFitResult?: JobFitResult;
 }
 
 // Track state per tab
 const tabStates = new Map<number, TabState>();
+
+// Debounce timers for auto job fit analysis (keyed by tabId)
+const jobFitTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // ============================================================================
 // Auth Data Validation & Storage
@@ -144,6 +155,17 @@ browser.runtime.onStartup.addListener(async () => {
 
   // Process any pending saves
   await processPendingSaves();
+
+  // Restore full-site content script if permission is still granted.
+  // Dynamic script registrations persist, but we re-verify the permission
+  // is still active in case the user revoked it via chrome://extensions.
+  const granted = await hasFullSitePermission();
+  if (granted) {
+    await registerFullSiteContentScript();
+  } else {
+    // Permission was revoked externally — sync settings
+    await storage.setSettings({ fullSiteAccess: false });
+  }
 });
 
 // ============================================================================
@@ -190,8 +212,120 @@ async function updateTabIcon(tabId: number): Promise<void> {
 
   if (!authState.isAuthenticated) {
     await updateIconState(ICON_STATES.DEFAULT, tabId);
-  } else {
-    await updateIconState(ICON_STATES.AUTHENTICATED, tabId);
+    return;
+  }
+
+  // Set the base icon to active (full color)
+  await updateIconState(ICON_STATES.AUTHENTICATED, tabId);
+
+  const tabState = tabStates.get(tabId);
+  if (!tabState?.hasJob) return;
+
+  // Job fit badge states overlay on top of the active icon
+  if (tabState.jobFitStatus === "loading") {
+    await chrome.action.setBadgeText({ text: "...", tabId });
+    await chrome.action.setBadgeBackgroundColor({ color: "#3B82F6", tabId }); // blue
+    return;
+  }
+
+  if (tabState.jobFitStatus === "ready" && tabState.jobFitResult) {
+    const score = tabState.jobFitResult.overallScore;
+    const color =
+      score >= 80 ? "#16a34a" : // green
+      score >= 60 ? "#ca8a04" : // yellow
+      "#6b7280";               // gray
+    await chrome.action.setBadgeText({ text: String(score), tabId });
+    await chrome.action.setBadgeBackgroundColor({ color, tabId });
+    return;
+  }
+
+  if (tabState.jobFitStatus === "no_resume") {
+    await chrome.action.setBadgeText({ text: "?", tabId });
+    await chrome.action.setBadgeBackgroundColor({ color: "#9CA3AF", tabId });
+    return;
+  }
+}
+
+// ============================================================================
+// Job Fit Analysis
+// ============================================================================
+
+/**
+ * Schedule auto job fit analysis for a tab, with 3s debounce.
+ */
+async function scheduleJobFitAnalysis(tabId: number, jobData: JobData): Promise<void> {
+  // Clear any existing timer for this tab
+  const existing = jobFitTimers.get(tabId);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    jobFitTimers.delete(tabId);
+    runJobFitAnalysis(tabId, jobData).catch(console.error);
+  }, JOB_FIT_CONFIG.DWELL_DELAY_MS);
+
+  jobFitTimers.set(tabId, timer);
+}
+
+async function runJobFitAnalysis(tabId: number, jobData: JobData): Promise<void> {
+  const settings = await storage.getSettings();
+
+  // Respect user opt-out
+  if (!settings.autoAnalysis) return;
+
+  const url = jobData.url;
+
+  // Check cache first
+  const cached = await storage.getJobFitCacheEntry(url);
+  if (cached) {
+    const status: JobFitStatus = cached.errorCode === "no_resume"
+      ? "no_resume"
+      : cached.errorCode === "upgrade_required"
+      ? "upgrade_required"
+      : cached.result
+      ? "ready"
+      : "error";
+
+    tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: status, jobFitResult: cached.result });
+    await updateTabIcon(tabId);
+    return;
+  }
+
+  // Set loading state
+  tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: "loading" });
+  await updateTabIcon(tabId);
+
+  try {
+    const result = await api.jobFit({
+      jobDescription: jobData.description ?? "",
+      jobTitle: jobData.title ?? undefined,
+      company: jobData.company ?? undefined,
+    });
+
+    const cacheEntry: JobFitCacheEntry = { result, cachedAt: Date.now() };
+    await storage.setJobFitCacheEntry(url, cacheEntry);
+
+    tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: "ready", jobFitResult: result });
+    await updateTabIcon(tabId);
+
+  } catch (error) {
+    let status: JobFitStatus = "error";
+    let errorCode: JobFitCacheEntry["errorCode"] = "error";
+
+    if (error instanceof ApiClientError) {
+      if (error.status === 403) {
+        status = "upgrade_required";
+        errorCode = "upgrade_required";
+      } else if (error.status === 400) {
+        status = "no_resume";
+        errorCode = "no_resume";
+      }
+    }
+
+    // Cache the error state too (avoids re-firing on every page reload)
+    await storage.setJobFitCacheEntry(url, { errorCode, cachedAt: Date.now() });
+
+    tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: status, jobFitResult: undefined });
+    await updateTabIcon(tabId);
   }
 }
 
@@ -346,6 +480,9 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         }
 
         tabStates.set(tabId, { hasJob: true, jobData, isDuplicate });
+        await updateTabIcon(tabId);
+        await scheduleJobFitAnalysis(tabId, jobData);
+        return;
       } else {
         tabStates.set(tabId, { hasJob: false });
       }
@@ -372,7 +509,98 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
  */
 browser.tabs.onRemoved.addListener((tabId) => {
   tabStates.delete(tabId);
+  // Clear any pending job fit timer
+  const timer = jobFitTimers.get(tabId);
+  if (timer) {
+    clearTimeout(timer);
+    jobFitTimers.delete(tabId);
+  }
 });
+
+// ============================================================================
+// Full-Site Access (Optional Permission)
+// ============================================================================
+
+/**
+ * Check whether the full-site optional permission is currently granted.
+ */
+async function hasFullSitePermission(): Promise<boolean> {
+  try {
+    return await browser.permissions.contains({ origins: [FULL_SITE_ORIGIN] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Register the dynamic content script for full-site access.
+ * Called after the optional permission is granted.
+ */
+async function registerFullSiteContentScript(): Promise<void> {
+  try {
+    // Unregister first to avoid duplicate registration errors
+    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] }).catch(() => {});
+    await chrome.scripting.registerContentScripts([
+      {
+        id: FULL_SITE_SCRIPT_ID,
+        matches: ["<all_urls>"],
+        // contentScriptUrl is resolved by CRXJS at build time — avoids hardcoding
+        // a path that may be hashed or relocated in the extension bundle.
+        js: [contentScriptUrl],
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      },
+    ]);
+  } catch (error) {
+    console.error("[AppTrack] Failed to register full-site content script:", error);
+  }
+}
+
+/**
+ * Unregister the dynamic full-site content script.
+ */
+async function unregisterFullSiteContentScript(): Promise<void> {
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] });
+  } catch {
+    // Script may not be registered — ignore
+  }
+}
+
+/**
+ * Enable full-site access: request permission and register content script.
+ * Returns true if permission was granted.
+ *
+ * Note: browser.permissions.request requires a user gesture. This function
+ * must only be called in response to a user action (e.g., popup button click
+ * → message to background). Calling it programmatically on startup will fail.
+ */
+async function enableFullSiteAccess(): Promise<boolean> {
+  try {
+    const granted = await browser.permissions.request({ origins: [FULL_SITE_ORIGIN] });
+    if (granted) {
+      await registerFullSiteContentScript();
+      await storage.setSettings({ fullSiteAccess: true });
+    }
+    return granted;
+  } catch (error) {
+    console.error("[AppTrack] Error enabling full-site access:", error);
+    return false;
+  }
+}
+
+/**
+ * Disable full-site access: remove permission and unregister content script.
+ */
+async function disableFullSiteAccess(): Promise<void> {
+  try {
+    await unregisterFullSiteContentScript();
+    await browser.permissions.remove({ origins: [FULL_SITE_ORIGIN] });
+    await storage.setSettings({ fullSiteAccess: false });
+  } catch (error) {
+    console.error("[AppTrack] Error disabling full-site access:", error);
+  }
+}
 
 // ============================================================================
 // Offline Queue / Pending Saves
@@ -466,6 +694,16 @@ browser.runtime.onMessage.addListener(
         return handleLogoutMessage();
       case "REFRESH_TOKEN":
         return handleRefreshToken();
+      case "ENABLE_FULL_SITE_ACCESS":
+        return enableFullSiteAccess().then((granted) => ({ success: granted }));
+      case "DISABLE_FULL_SITE_ACCESS":
+        return disableFullSiteAccess().then(() => ({ success: true }));
+      case "GET_FULL_SITE_STATUS":
+        return hasFullSitePermission().then((enabled) => ({ success: true, data: { enabled } }));
+      case "GET_JOB_FIT":
+        return handleGetJobFit(sender.tab?.id);
+      case "CLEAR_JOB_FIT_CACHE":
+        return storage.clearJobFitCache().then(() => ({ success: true }));
       default:
         return undefined;
     }
@@ -649,6 +887,34 @@ async function handleCheckDuplicate(
       success: false,
       error: error instanceof ApiClientError ? error.message : String(error),
     };
+  }
+}
+
+/**
+ * Get job fit state for the active (or sender) tab
+ */
+async function handleGetJobFit(
+  tabId?: number
+): Promise<{ success: boolean; data?: { status: JobFitStatus; result?: JobFitResult }; error?: string }> {
+  try {
+    let targetTabId = tabId;
+    if (!targetTabId) {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      targetTabId = tabs[0]?.id;
+    }
+    if (!targetTabId) {
+      return { success: false, error: "No active tab" };
+    }
+    const tabState = tabStates.get(targetTabId);
+    return {
+      success: true,
+      data: {
+        status: tabState?.jobFitStatus ?? "idle",
+        result: tabState?.jobFitResult,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
   }
 }
 

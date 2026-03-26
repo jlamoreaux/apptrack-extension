@@ -3,8 +3,8 @@
  */
 
 import browser from "webextension-polyfill";
-import type { AuthState } from "@/shared/types";
-import { STORAGE_KEYS } from "@/shared/constants";
+import type { AuthState, ExtensionSettings, JobFitCacheEntry } from "@/shared/types";
+import { STORAGE_KEYS, DEFAULT_SETTINGS, JOB_FIT_CONFIG } from "@/shared/constants";
 
 type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
@@ -172,6 +172,65 @@ export async function clearAuthState(): Promise<void> {
   await remove(STORAGE_KEYS.AUTH_STATE);
 }
 
+/**
+ * Get extension settings, merging with defaults for any missing keys
+ */
+export async function getSettings(): Promise<ExtensionSettings> {
+  const stored = await get<Partial<ExtensionSettings>>(STORAGE_KEYS.SETTINGS);
+  return { ...DEFAULT_SETTINGS, ...stored };
+}
+
+/**
+ * Update extension settings (merges with existing)
+ */
+export async function setSettings(updates: Partial<ExtensionSettings>): Promise<void> {
+  const current = await getSettings();
+  await set(STORAGE_KEYS.SETTINGS, { ...current, ...updates });
+}
+
+/**
+ * Get job fit cache entry for a URL
+ */
+async function getJobFitCacheEntry(url: string): Promise<JobFitCacheEntry | null> {
+  try {
+    const cache = await get<Record<string, JobFitCacheEntry>>(STORAGE_KEYS.JOB_FIT_CACHE);
+    if (!cache || !cache[url]) return null;
+
+    const entry = cache[url];
+    // Check TTL
+    if (Date.now() - entry.cachedAt > JOB_FIT_CONFIG.CACHE_TTL) {
+      return null; // Expired
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set job fit cache entry for a URL
+ */
+async function setJobFitCacheEntry(url: string, entry: JobFitCacheEntry): Promise<void> {
+  try {
+    const cache = (await get<Record<string, JobFitCacheEntry>>(STORAGE_KEYS.JOB_FIT_CACHE)) ?? {};
+    cache[url] = entry;
+    await set(STORAGE_KEYS.JOB_FIT_CACHE, cache);
+  } catch (error) {
+    console.error("[AppTrack] Failed to write job fit cache:", error);
+  }
+}
+
+/**
+ * Clear the entire job fit cache (call on resume upload)
+ */
+async function clearJobFitCache(): Promise<void> {
+  try {
+    await remove(STORAGE_KEYS.JOB_FIT_CACHE);
+  } catch (error) {
+    console.error("[AppTrack] Failed to clear job fit cache:", error);
+  }
+}
+
 export const storage = {
   get,
   set,
@@ -180,4 +239,9 @@ export const storage = {
   getAuthState,
   setAuthState,
   clearAuthState,
+  getSettings,
+  setSettings,
+  getJobFitCacheEntry,
+  setJobFitCacheEntry,
+  clearJobFitCache,
 };

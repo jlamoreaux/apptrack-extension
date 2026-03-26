@@ -3,7 +3,7 @@
  */
 
 import browser from "webextension-polyfill";
-import type { MessageType, MessageResponse, JobData, AuthState, ApplicationPayload } from "@/shared/types";
+import type { MessageType, MessageResponse, JobData, AuthState, ApplicationPayload, JobFitStatus, JobFitResult } from "@/shared/types";
 
 /**
  * Send a message to the background script
@@ -146,5 +146,45 @@ export const messages = {
       applicationId: response.data?.applicationId,
       error: response.error,
     };
+  },
+
+  /**
+   * Enable full-site access (requests optional permission + registers content script)
+   */
+  async enableFullSiteAccess(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("ENABLE_FULL_SITE_ACCESS");
+    return { success: response.success ?? false };
+  },
+
+  /**
+   * Disable full-site access (removes permission + unregisters content script)
+   */
+  async disableFullSiteAccess(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("DISABLE_FULL_SITE_ACCESS");
+    return { success: response.success ?? false };
+  },
+
+  /**
+   * Check if full-site access permission is currently active
+   */
+  async getFullSiteStatus(): Promise<boolean> {
+    const response = await sendToBackground<{ enabled: boolean }>("GET_FULL_SITE_STATUS");
+    return response.data?.enabled ?? false;
+  },
+
+  /**
+   * Get job fit result for the current tab
+   */
+  async getJobFit(): Promise<{ status: JobFitStatus; result?: JobFitResult }> {
+    const response = await sendToBackground<{ status: JobFitStatus; result?: JobFitResult }>("GET_JOB_FIT");
+    return response.data ?? { status: "idle" };
+  },
+
+  /**
+   * Clear the job fit cache (call after resume upload)
+   */
+  async clearJobFitCache(): Promise<{ success: boolean }> {
+    const response = await sendToBackground<{ success: boolean }>("CLEAR_JOB_FIT_CACHE");
+    return { success: response.success ?? false };
   },
 };
