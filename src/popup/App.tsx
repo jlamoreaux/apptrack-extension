@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from "react";
+import browser from "webextension-polyfill";
 import type {
   ExtensionState,
   JobData,
@@ -140,7 +141,7 @@ function AppContent() {
       const fullSiteAccess = await messages.getFullSiteStatus();
 
       // Load settings (for autoAnalysis)
-      const settings = await chrome.storage.local.get("apptrack_settings");
+      const settings = await browser.storage.local.get("apptrack_settings");
       const autoAnalysis =
         (settings["apptrack_settings"] as { autoAnalysis?: boolean } | null)?.autoAnalysis ?? true;
 
@@ -215,7 +216,7 @@ function AppContent() {
   // Listen for auth state changes (e.g., after user signs in from web app)
   useEffect(() => {
     const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: Record<string, browser.Storage.StorageChange>,
       areaName: string
     ) => {
       if (areaName === "local" && changes[STORAGE_KEYS.AUTH_STATE]) {
@@ -224,9 +225,9 @@ function AppContent() {
       }
     };
 
-    chrome.storage.onChanged.addListener(handleStorageChange);
+    browser.storage.onChanged.addListener(handleStorageChange);
     return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
+      browser.storage.onChanged.removeListener(handleStorageChange);
     };
   }, [initialize]);
 
@@ -314,9 +315,9 @@ function AppContent() {
   // Toggle auto-analysis setting
   const handleToggleAutoAnalysis = useCallback(async (enable: boolean) => {
     // Use chrome.storage directly for simplicity (storage.setSettings merges)
-    const stored = await chrome.storage.local.get("apptrack_settings");
+    const stored = await browser.storage.local.get("apptrack_settings");
     const current = (stored["apptrack_settings"] as Record<string, unknown>) ?? {};
-    await chrome.storage.local.set({ apptrack_settings: { ...current, autoAnalysis: enable } });
+    await browser.storage.local.set({ apptrack_settings: { ...current, autoAnalysis: enable } });
     setState((s) => ({ ...s, autoAnalysis: enable }));
   }, []);
 
@@ -421,10 +422,10 @@ function AppContent() {
 function LoggedOutView() {
   const handleLogin = () => {
     // Get the extension ID and pass it to the callback page
-    const extensionId = chrome.runtime.id;
+    const extensionId = browser.runtime.id;
     const callbackUrl = new URL(`${APP_URL}/auth/extension-callback`);
     callbackUrl.searchParams.set("extensionId", extensionId);
-    void chrome.tabs.create({ url: callbackUrl.toString() });
+    void browser.tabs.create({ url: callbackUrl.toString() });
   };
 
   return (
@@ -442,7 +443,7 @@ function LoggedOutView() {
       <p className="text-xs text-gray-400 mt-4">
         Don&apos;t have an account?{" "}
         <button
-          onClick={() => chrome.tabs.create({ url: `${APP_URL}/signup` })}
+          onClick={() => browser.tabs.create({ url: `${APP_URL}/signup` })}
           className="text-brand-500 hover:text-brand-600"
         >
           Sign up free
@@ -464,7 +465,7 @@ function NoJobView() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => chrome.tabs.create({ url: `${APP_URL}/dashboard` })}
+          onClick={() => browser.tabs.create({ url: `${APP_URL}/dashboard` })}
           className="text-brand-500"
         >
           <ExternalLinkIcon className="w-4 h-4 mr-1.5" />
@@ -513,7 +514,7 @@ function JobFitSection({ status, result }: JobFitSectionProps) {
           <p className="text-xs text-gray-600 leading-snug">{result.summary}</p>
           <button
             type="button"
-            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/ai-coach" })}
+            onClick={() => browser.tabs.create({ url: "https://apptrack.ing/dashboard/ai-coach" })}
             className="text-xs text-brand-500 hover:text-brand-600 mt-1 flex items-center gap-1"
           >
             Run with a different resume
@@ -527,7 +528,7 @@ function JobFitSection({ status, result }: JobFitSectionProps) {
           <p className="text-xs text-gray-600">Upload your resume to see your fit score.</p>
           <button
             type="button"
-            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/resumes" })}
+            onClick={() => browser.tabs.create({ url: "https://apptrack.ing/dashboard/resumes" })}
             className="text-xs text-brand-500 hover:text-brand-600 mt-1"
           >
             Upload resume →
@@ -540,7 +541,7 @@ function JobFitSection({ status, result }: JobFitSectionProps) {
           <p className="text-xs text-gray-600 mb-1">Upgrade to Pro to see your fit score.</p>
           <button
             type="button"
-            onClick={() => chrome.tabs.create({ url: "https://apptrack.ing/dashboard/upgrade" })}
+            onClick={() => browser.tabs.create({ url: "https://apptrack.ing/dashboard/upgrade" })}
             className="text-xs text-brand-500 hover:text-brand-600"
           >
             Upgrade to Pro →
@@ -691,7 +692,7 @@ function AlreadyTrackedView({ jobData }: AlreadyTrackedViewProps) {
       <p className="text-gray-400 text-xs mb-4">is already in your applications</p>
       <Button
         variant="secondary"
-        onClick={() => chrome.tabs.create({ url: `${APP_URL}/dashboard` })}
+        onClick={() => browser.tabs.create({ url: `${APP_URL}/dashboard` })}
         className="w-full"
       >
         <ExternalLinkIcon className="w-4 h-4 mr-1.5" />
@@ -721,7 +722,7 @@ function SuccessView({ wasQueued }: SuccessViewProps) {
         <p className="text-gray-500 text-sm mb-4">Added to your job tracker</p>
       )}
       <Button
-        onClick={() => chrome.tabs.create({ url: `${APP_URL}/dashboard` })}
+        onClick={() => browser.tabs.create({ url: `${APP_URL}/dashboard` })}
         className="w-full"
       >
         <ExternalLinkIcon className="w-4 h-4 mr-1.5" />

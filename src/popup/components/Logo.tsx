@@ -1,6 +1,7 @@
 /**
  * AppTrack Logo component
  */
+import browser from "webextension-polyfill";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg";
@@ -24,7 +25,7 @@ export function Logo({ size = "md", showText = true }: LogoProps) {
   return (
     <div className="flex items-center gap-2">
       <img
-        src={chrome.runtime.getURL("icons/icon-128.png")}
+        src={browser.runtime.getURL("icons/icon-128.png")}
         alt="AppTrack"
         width={px}
         height={px}

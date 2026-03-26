@@ -22,7 +22,7 @@ import type {
   JobFitCacheEntry,
 } from "@/shared/types";
 // CRXJS resolves this to the correct built path at bundle time.
-// Using ?script ensures the path stays correct even if CRXJS adds content hashing.
+// For Firefox builds (no CRXJS), a Vite plugin resolves this to a plain string export.
 import contentScriptUrl from "../content/index.ts?script";
 
 // ============================================================================
@@ -185,8 +185,6 @@ browser.runtime.onStartup.addListener(() => {
 
 /**
  * Update the extension icon: greyed out when logged out, full color when authenticated.
- * Uses chrome.action directly instead of the browser polyfill because
- * webextension-polyfill doesn't properly type or polyfill setIcon/setBadgeText.
  */
 async function updateIconState(state: IconState, tabId?: number): Promise<void> {
   try {
@@ -199,19 +197,33 @@ async function updateIconState(state: IconState, tabId?: number): Promise<void> 
     };
 
     if (tabId) {
-      await chrome.action.setIcon({ path, tabId });
+      await browser.action.setIcon({ path, tabId });
     } else {
-      await chrome.action.setIcon({ path });
+      await browser.action.setIcon({ path });
     }
 
     // Clear any leftover badge text
     if (tabId) {
-      await chrome.action.setBadgeText({ tabId, text: "" });
+      await browser.action.setBadgeText({ tabId, text: "" });
     } else {
-      await chrome.action.setBadgeText({ text: "" });
+      await browser.action.setBadgeText({ text: "" });
     }
   } catch (error) {
     console.error("[AppTrack] Error updating icon:", error);
+  }
+}
+
+/**
+ * Wrapper for setBadgeBackgroundColor that gracefully handles Firefox,
+ * which may not support this API in all versions.
+ */
+async function setBadgeColorSafe(color: string, tabId?: number): Promise<void> {
+  try {
+    if (typeof browser.action.setBadgeBackgroundColor === "function") {
+      await browser.action.setBadgeBackgroundColor(tabId ? { color, tabId } : { color });
+    }
+  } catch {
+    // Firefox may not support setBadgeBackgroundColor — ignore
   }
 }
 
@@ -234,8 +246,8 @@ async function updateTabIcon(tabId: number): Promise<void> {
 
   // Job fit badge states overlay on top of the active icon
   if (tabState.jobFitStatus === "loading") {
-    await chrome.action.setBadgeText({ text: "...", tabId });
-    await chrome.action.setBadgeBackgroundColor({ color: "#3B82F6", tabId }); // blue
+    await browser.action.setBadgeText({ text: "...", tabId });
+    await setBadgeColorSafe("#3B82F6", tabId); // blue
     return;
   }
 
@@ -247,14 +259,14 @@ async function updateTabIcon(tabId: number): Promise<void> {
         : score >= 60
           ? "#ca8a04" // yellow
           : "#6b7280"; // gray
-    await chrome.action.setBadgeText({ text: String(score), tabId });
-    await chrome.action.setBadgeBackgroundColor({ color, tabId });
+    await browser.action.setBadgeText({ text: String(score), tabId });
+    await setBadgeColorSafe(color, tabId);
     return;
   }
 
   if (tabState.jobFitStatus === "no_resume") {
-    await chrome.action.setBadgeText({ text: "?", tabId });
-    await chrome.action.setBadgeBackgroundColor({ color: "#9CA3AF", tabId });
+    await browser.action.setBadgeText({ text: "?", tabId });
+    await setBadgeColorSafe("#9CA3AF", tabId);
     return;
   }
 }
@@ -563,8 +575,10 @@ async function hasFullSitePermission(): Promise<boolean> {
 async function registerFullSiteContentScript(): Promise<void> {
   try {
     // Unregister first to avoid duplicate registration errors
-    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] }).catch(() => {});
-    await chrome.scripting.registerContentScripts([
+    await browser.scripting
+      .unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] })
+      .catch(() => {});
+    await browser.scripting.registerContentScripts([
       {
         id: FULL_SITE_SCRIPT_ID,
         matches: ["<all_urls>"],
@@ -585,7 +599,7 @@ async function registerFullSiteContentScript(): Promise<void> {
  */
 async function unregisterFullSiteContentScript(): Promise<void> {
   try {
-    await chrome.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] });
+    await browser.scripting.unregisterContentScripts({ ids: [FULL_SITE_SCRIPT_ID] });
   } catch {
     // Script may not be registered — ignore
   }
