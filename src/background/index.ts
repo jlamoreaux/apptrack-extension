@@ -14,7 +14,13 @@ import {
   FULL_SITE_ORIGIN,
   JOB_FIT_CONFIG,
 } from "@/shared/constants";
-import type { JobData, ApplicationPayload, JobFitStatus, JobFitResult, JobFitCacheEntry } from "@/shared/types";
+import type {
+  JobData,
+  ApplicationPayload,
+  JobFitStatus,
+  JobFitResult,
+  JobFitCacheEntry,
+} from "@/shared/types";
 // CRXJS resolves this to the correct built path at bundle time.
 // Using ?script ensures the path stays correct even if CRXJS adds content hashing.
 import contentScriptUrl from "../content/index.ts?script";
@@ -60,7 +66,9 @@ interface AuthPayload {
  * Validate auth payload has required fields with correct types.
  * Accepts expiresAt as either a number (timestamp) or ISO string, normalizes to number.
  */
-function validateAuthPayload(payload: unknown): { valid: true; data: AuthPayload } | { valid: false; error: string } {
+function validateAuthPayload(
+  payload: unknown
+): { valid: true; data: AuthPayload } | { valid: false; error: string } {
   if (!payload || typeof payload !== "object") {
     return { valid: false, error: "Invalid payload format" };
   }
@@ -146,29 +154,28 @@ browser.runtime.onStartup.addListener(() => {
   // eslint-disable-next-line no-console
   console.log("[AppTrack] Extension started");
   void (async () => {
+    // Restore icon state based on auth
+    const authState = await storage.getAuthState();
+    await updateIconState(
+      authState.isAuthenticated ? ICON_STATES.AUTHENTICATED : ICON_STATES.DEFAULT
+    );
 
-  // Restore icon state based on auth
-  const authState = await storage.getAuthState();
-  await updateIconState(
-    authState.isAuthenticated ? ICON_STATES.AUTHENTICATED : ICON_STATES.DEFAULT
-  );
+    // Setup token refresh alarm
+    await setupTokenRefreshAlarm();
 
-  // Setup token refresh alarm
-  await setupTokenRefreshAlarm();
+    // Process any pending saves
+    await processPendingSaves();
 
-  // Process any pending saves
-  await processPendingSaves();
-
-  // Restore full-site content script if permission is still granted.
-  // Dynamic script registrations persist, but we re-verify the permission
-  // is still active in case the user revoked it via chrome://extensions.
-  const granted = await hasFullSitePermission();
-  if (granted) {
-    await registerFullSiteContentScript();
-  } else {
-    // Permission was revoked externally — sync settings
-    await storage.setSettings({ fullSiteAccess: false });
-  }
+    // Restore full-site content script if permission is still granted.
+    // Dynamic script registrations persist, but we re-verify the permission
+    // is still active in case the user revoked it via chrome://extensions.
+    const granted = await hasFullSitePermission();
+    if (granted) {
+      await registerFullSiteContentScript();
+    } else {
+      // Permission was revoked externally — sync settings
+      await storage.setSettings({ fullSiteAccess: false });
+    }
   })();
 });
 
@@ -235,9 +242,11 @@ async function updateTabIcon(tabId: number): Promise<void> {
   if (tabState.jobFitStatus === "ready" && tabState.jobFitResult) {
     const score = tabState.jobFitResult.overallScore;
     const color =
-      score >= 80 ? "#16a34a" : // green
-      score >= 60 ? "#ca8a04" : // yellow
-      "#6b7280";               // gray
+      score >= 80
+        ? "#16a34a" // green
+        : score >= 60
+          ? "#ca8a04" // yellow
+          : "#6b7280"; // gray
     await chrome.action.setBadgeText({ text: String(score), tabId });
     await chrome.action.setBadgeBackgroundColor({ color, tabId });
     return;
@@ -281,15 +290,20 @@ async function runJobFitAnalysis(tabId: number, jobData: JobData): Promise<void>
   // Check cache first
   const cached = await storage.getJobFitCacheEntry(url);
   if (cached) {
-    const status: JobFitStatus = cached.errorCode === "no_resume"
-      ? "no_resume"
-      : cached.errorCode === "upgrade_required"
-      ? "upgrade_required"
-      : cached.result
-      ? "ready"
-      : "error";
+    const status: JobFitStatus =
+      cached.errorCode === "no_resume"
+        ? "no_resume"
+        : cached.errorCode === "upgrade_required"
+          ? "upgrade_required"
+          : cached.result
+            ? "ready"
+            : "error";
 
-    tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: status, jobFitResult: cached.result });
+    tabStates.set(tabId, {
+      ...tabStates.get(tabId)!,
+      jobFitStatus: status,
+      jobFitResult: cached.result,
+    });
     await updateTabIcon(tabId);
     return;
   }
@@ -310,7 +324,6 @@ async function runJobFitAnalysis(tabId: number, jobData: JobData): Promise<void>
 
     tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: "ready", jobFitResult: result });
     await updateTabIcon(tabId);
-
   } catch (error) {
     let status: JobFitStatus = "error";
     let errorCode: JobFitCacheEntry["errorCode"] = "error";
@@ -328,7 +341,11 @@ async function runJobFitAnalysis(tabId: number, jobData: JobData): Promise<void>
     // Cache the error state too (avoids re-firing on every page reload)
     await storage.setJobFitCacheEntry(url, { errorCode, cachedAt: Date.now() });
 
-    tabStates.set(tabId, { ...tabStates.get(tabId)!, jobFitStatus: status, jobFitResult: undefined });
+    tabStates.set(tabId, {
+      ...tabStates.get(tabId)!,
+      jobFitStatus: status,
+      jobFitResult: undefined,
+    });
     await updateTabIcon(tabId);
   }
 }
@@ -391,9 +408,10 @@ async function refreshAuthToken(): Promise<boolean> {
     const result = await api.refreshToken();
 
     // Backend returns expiresAt as ISO string — convert to timestamp
-    const expiresAt = typeof result.expiresAt === "string"
-      ? new Date(result.expiresAt).getTime()
-      : result.expiresAt;
+    const expiresAt =
+      typeof result.expiresAt === "string"
+        ? new Date(result.expiresAt).getTime()
+        : result.expiresAt;
 
     if (isNaN(expiresAt) || expiresAt <= Date.now()) {
       console.error("[AppTrack] Token refresh returned invalid expiresAt:", result.expiresAt);
@@ -443,65 +461,63 @@ async function handleLogout(): Promise<void> {
  */
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   void (async () => {
-  // Only act on complete page loads with a URL
-  if (changeInfo.status !== "complete" || !tab.url) {
-    return;
-  }
+    // Only act on complete page loads with a URL
+    if (changeInfo.status !== "complete" || !tab.url) {
+      return;
+    }
 
-  // Skip non-http(s) pages
-  if (!tab.url.startsWith("http")) {
-    tabStates.delete(tabId);
-    await updateTabIcon(tabId);
-    return;
-  }
+    // Skip non-http(s) pages
+    if (!tab.url.startsWith("http")) {
+      tabStates.delete(tabId);
+      await updateTabIcon(tabId);
+      return;
+    }
 
-  // Check auth state first
-  const authState = await storage.getAuthState();
-  if (!authState.isAuthenticated) {
-    return;
-  }
+    // Check auth state first
+    const authState = await storage.getAuthState();
+    if (!authState.isAuthenticated) {
+      return;
+    }
 
-  // Try to extract job data from the page
-  try {
-    const response: { success?: boolean; data?: JobData } | undefined = await browser.tabs.sendMessage(tabId, {
-      type: "EXTRACT_JOB_DATA",
-    });
+    // Try to extract job data from the page
+    try {
+      const response: { success?: boolean; data?: JobData } | undefined =
+        await browser.tabs.sendMessage(tabId, {
+          type: "EXTRACT_JOB_DATA",
+        });
 
-    if (response?.success && response.data) {
-      const jobData = response.data;
-      const hasJob = !!(jobData.title || jobData.company);
+      if (response?.success && response.data) {
+        const jobData = response.data;
+        const hasJob = !!(jobData.title || jobData.company);
 
-      if (hasJob) {
-        // Check if already tracked using company + role (only if both are present)
-        let isDuplicate = false;
-        if (jobData.company && jobData.title) {
-          try {
-            const duplicateCheck = await api.checkDuplicate(
-              jobData.company,
-              jobData.title
-            );
-            isDuplicate = duplicateCheck.exists;
-          } catch {
-            // Ignore duplicate check errors
+        if (hasJob) {
+          // Check if already tracked using company + role (only if both are present)
+          let isDuplicate = false;
+          if (jobData.company && jobData.title) {
+            try {
+              const duplicateCheck = await api.checkDuplicate(jobData.company, jobData.title);
+              isDuplicate = duplicateCheck.exists;
+            } catch {
+              // Ignore duplicate check errors
+            }
           }
-        }
 
-        tabStates.set(tabId, { hasJob: true, jobData, isDuplicate });
-        await updateTabIcon(tabId);
-        scheduleJobFitAnalysis(tabId, jobData);
-        return;
+          tabStates.set(tabId, { hasJob: true, jobData, isDuplicate });
+          await updateTabIcon(tabId);
+          scheduleJobFitAnalysis(tabId, jobData);
+          return;
+        } else {
+          tabStates.set(tabId, { hasJob: false });
+        }
       } else {
         tabStates.set(tabId, { hasJob: false });
       }
-    } else {
+    } catch {
+      // Content script not ready or page doesn't support it
       tabStates.set(tabId, { hasJob: false });
     }
-  } catch {
-    // Content script not ready or page doesn't support it
-    tabStates.set(tabId, { hasJob: false });
-  }
 
-  await updateTabIcon(tabId);
+    await updateTabIcon(tabId);
   })();
 });
 
@@ -626,8 +642,7 @@ async function addPendingSave(data: ApplicationPayload): Promise<string> {
     retries: 0,
   };
 
-  const existingPending =
-    (await storage.get<PendingSave[]>(STORAGE_KEYS.PENDING_SAVES)) ?? [];
+  const existingPending = (await storage.get<PendingSave[]>(STORAGE_KEYS.PENDING_SAVES)) ?? [];
   existingPending.push(pending);
   await storage.set(STORAGE_KEYS.PENDING_SAVES, existingPending);
 
@@ -638,8 +653,7 @@ async function addPendingSave(data: ApplicationPayload): Promise<string> {
  * Process all pending saves
  */
 async function processPendingSaves(): Promise<void> {
-  const pending =
-    (await storage.get<PendingSave[]>(STORAGE_KEYS.PENDING_SAVES)) ?? [];
+  const pending = (await storage.get<PendingSave[]>(STORAGE_KEYS.PENDING_SAVES)) ?? [];
 
   if (pending.length === 0) return;
 
@@ -652,7 +666,12 @@ async function processPendingSaves(): Promise<void> {
       console.log("[AppTrack] Processed pending save:", item.id);
     } catch (error) {
       // Keep in queue if network error, discard if 4xx
-      if (error instanceof ApiClientError && error.status && error.status >= 400 && error.status < 500) {
+      if (
+        error instanceof ApiClientError &&
+        error.status &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
         console.error("[AppTrack] Discarding invalid pending save:", item.id, error);
       } else if (item.retries < 3) {
         stillPending.push({ ...item, retries: item.retries + 1 });
@@ -673,10 +692,7 @@ async function processPendingSaves(): Promise<void> {
  * Message handler for popup and content script communication
  */
 browser.runtime.onMessage.addListener(
-  (
-    message: unknown,
-    sender: browser.Runtime.MessageSender
-  ): Promise<unknown> | undefined => {
+  (message: unknown, sender: browser.Runtime.MessageSender): Promise<unknown> | undefined => {
     const msg = message as { type: string; payload?: unknown };
     if (!msg || typeof msg.type !== "string") {
       return undefined;
@@ -745,9 +761,7 @@ async function handleGetAuthState(): Promise<{
 /**
  * Set authentication state (called after OAuth flow)
  */
-async function handleSetAuthState(
-  payload: unknown
-): Promise<{ success: boolean; error?: string }> {
+async function handleSetAuthState(payload: unknown): Promise<{ success: boolean; error?: string }> {
   try {
     const validation = validateAuthPayload(payload);
     if (!validation.valid) {
@@ -803,9 +817,10 @@ async function handleGetJobData(
     }
 
     // Fetch fresh data
-    const response: { success?: boolean; data?: JobData } | undefined = await browser.tabs.sendMessage(targetTabId, {
-      type: "EXTRACT_JOB_DATA",
-    });
+    const response: { success?: boolean; data?: JobData } | undefined =
+      await browser.tabs.sendMessage(targetTabId, {
+        type: "EXTRACT_JOB_DATA",
+      });
 
     if (response?.success && response.data) {
       return { success: true, data: response.data };
@@ -852,10 +867,7 @@ async function handleSaveApplication(
       return { success: true, data: { id: result.id } };
     } catch (error) {
       // If network error, queue for later
-      if (
-        error instanceof ApiClientError &&
-        (!error.status || error.code === "TIMEOUT")
-      ) {
+      if (error instanceof ApiClientError && (!error.status || error.code === "TIMEOUT")) {
         const pendingId = await addPendingSave(applicationData);
         return { success: true, data: { id: pendingId, queued: true } };
       }
@@ -876,7 +888,11 @@ async function handleSaveApplication(
  */
 async function handleCheckDuplicate(
   payload: unknown
-): Promise<{ success: boolean; data?: { exists: boolean; applicationId?: string }; error?: string }> {
+): Promise<{
+  success: boolean;
+  data?: { exists: boolean; applicationId?: string };
+  error?: string;
+}> {
   try {
     const { company, role } = payload as { company: string; role: string };
     if (!company || !role) {
@@ -904,7 +920,11 @@ async function handleCheckDuplicate(
  */
 async function handleGetJobFit(
   tabId?: number
-): Promise<{ success: boolean; data?: { status: JobFitStatus; result?: JobFitResult }; error?: string }> {
+): Promise<{
+  success: boolean;
+  data?: { status: JobFitStatus; result?: JobFitResult };
+  error?: string;
+}> {
   try {
     let targetTabId = tabId;
     if (!targetTabId) {
@@ -988,9 +1008,7 @@ browser.runtime.onMessageExternal.addListener(
  * The web app's extension-callback page flattens the token response before sending:
  * { token, expiresAt: ISO string, userId, email }
  */
-async function handleAuthCallback(
-  payload: unknown
-): Promise<{ success: boolean; error?: string }> {
+async function handleAuthCallback(payload: unknown): Promise<{ success: boolean; error?: string }> {
   try {
     const validation = validateAuthPayload(payload);
     if (!validation.valid) {

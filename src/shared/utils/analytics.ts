@@ -52,9 +52,7 @@ export async function track(event: string, properties?: Record<string, unknown>)
 /**
  * Sanitize event properties to remove PII
  */
-function sanitizeProperties(
-  properties?: Record<string, unknown>
-): Record<string, unknown> {
+function sanitizeProperties(properties?: Record<string, unknown>): Record<string, unknown> {
   if (!properties) return {};
 
   const sanitized: Record<string, unknown> = {};
@@ -90,11 +88,7 @@ function isSafeProperty(key: string, value: unknown): boolean {
   }
 
   // Only allow primitive values
-  return (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 /**

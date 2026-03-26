@@ -31,9 +31,7 @@ export function Logo({ size = "md", showText = true }: LogoProps) {
         className="rounded-lg"
       />
       {showText && (
-        <span className={`font-semibold text-gray-900 ${textSizes[size]}`}>
-          AppTrack
-        </span>
+        <span className={`font-semibold text-gray-900 ${textSizes[size]}`}>AppTrack</span>
       )}
     </div>
   );

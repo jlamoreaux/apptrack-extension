@@ -14,10 +14,7 @@ interface RequestOptions extends RequestInit {
 /**
  * Make an API request with automatic token injection and retry logic
  */
-async function request<T>(
-  endpoint: string,
-  options: RequestOptions = {}
-): Promise<T> {
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { timeout = API_CONFIG.TIMEOUT, retry = true, ...fetchOptions } = options;
 
   // Get auth token
@@ -136,7 +133,10 @@ export const api = {
   /**
    * Check if an application already exists by company and role
    */
-  async checkDuplicate(company: string, role: string): Promise<{ exists: boolean; applicationId?: string }> {
+  async checkDuplicate(
+    company: string,
+    role: string
+  ): Promise<{ exists: boolean; applicationId?: string }> {
     const params = new URLSearchParams({ company, role });
     return request(`${API_CONFIG.ENDPOINTS.CHECK_DUPLICATE}?${params.toString()}`, {
       method: "GET",

@@ -68,12 +68,12 @@ export interface JobFitCacheEntry {
 
 /** Status of auto job fit analysis for a tab */
 export type JobFitStatus =
-  | "idle"               // not yet triggered
-  | "loading"            // API call in progress
-  | "ready"              // score available
-  | "no_resume"          // Pro user but no resume uploaded
-  | "upgrade_required"   // free user
-  | "error";             // analysis failed
+  | "idle" // not yet triggered
+  | "loading" // API call in progress
+  | "ready" // score available
+  | "no_resume" // Pro user but no resume uploaded
+  | "upgrade_required" // free user
+  | "error"; // analysis failed
 
 /**
  * Message types for communication between extension components

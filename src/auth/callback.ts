@@ -126,14 +126,15 @@ async function handleCallback(): Promise<void> {
     }
 
     // Send auth data to background worker (background validates expiresAt)
-    const response: { success?: boolean; error?: string } | undefined = await browser.runtime.sendMessage({
-      type: "SET_AUTH_STATE",
-      payload: {
-        token: authParams.token,
-        expiresAt,
-        userId: authParams.userId,
-      },
-    });
+    const response: { success?: boolean; error?: string } | undefined =
+      await browser.runtime.sendMessage({
+        type: "SET_AUTH_STATE",
+        payload: {
+          token: authParams.token,
+          expiresAt,
+          userId: authParams.userId,
+        },
+      });
 
     if (!response?.success) {
       throw new Error(response?.error ?? "Failed to save authentication");
@@ -146,10 +147,7 @@ async function handleCallback(): Promise<void> {
     }, 2000);
   } catch (error) {
     console.error("[AppTrack] Auth callback error:", error);
-    showState(
-      "error",
-      error instanceof Error ? error.message : "An unexpected error occurred"
-    );
+    showState("error", error instanceof Error ? error.message : "An unexpected error occurred");
   }
 }
 

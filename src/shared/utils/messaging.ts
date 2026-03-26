@@ -3,7 +3,15 @@
  */
 
 import browser from "webextension-polyfill";
-import type { MessageType, MessageResponse, JobData, AuthState, ApplicationPayload, JobFitStatus, JobFitResult } from "@/shared/types";
+import type {
+  MessageType,
+  MessageResponse,
+  JobData,
+  AuthState,
+  ApplicationPayload,
+  JobFitStatus,
+  JobFitResult,
+} from "@/shared/types";
 
 /**
  * Send a message to the background script
@@ -108,7 +116,7 @@ export const messages = {
    */
   async extractJobData(): Promise<JobData | null> {
     const response = await sendToContentScript<JobData>("EXTRACT_JOB_DATA");
-    return response.success ? response.data ?? null : null;
+    return response.success ? (response.data ?? null) : null;
   },
 
   /**
@@ -176,7 +184,9 @@ export const messages = {
    * Get job fit result for the current tab
    */
   async getJobFit(): Promise<{ status: JobFitStatus; result?: JobFitResult }> {
-    const response = await sendToBackground<{ status: JobFitStatus; result?: JobFitResult }>("GET_JOB_FIT");
+    const response = await sendToBackground<{ status: JobFitStatus; result?: JobFitResult }>(
+      "GET_JOB_FIT"
+    );
     return response.data ?? { status: "idle" };
   },
 

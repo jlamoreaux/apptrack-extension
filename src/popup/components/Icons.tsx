@@ -8,12 +8,7 @@ interface IconProps {
 
 export function SearchIcon({ className = "w-12 h-12" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -26,12 +21,7 @@ export function SearchIcon({ className = "w-12 h-12" }: IconProps) {
 
 export function CheckCircleIcon({ className = "w-12 h-12" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -44,12 +34,7 @@ export function CheckCircleIcon({ className = "w-12 h-12" }: IconProps) {
 
 export function ExclamationIcon({ className = "w-12 h-12" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -62,12 +47,7 @@ export function ExclamationIcon({ className = "w-12 h-12" }: IconProps) {
 
 export function ErrorIcon({ className = "w-12 h-12" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -80,12 +60,7 @@ export function ErrorIcon({ className = "w-12 h-12" }: IconProps) {
 
 export function BriefcaseIcon({ className = "w-12 h-12" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -98,12 +73,7 @@ export function BriefcaseIcon({ className = "w-12 h-12" }: IconProps) {
 
 export function CloudOfflineIcon({ className = "w-4 h-4" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -116,12 +86,7 @@ export function CloudOfflineIcon({ className = "w-4 h-4" }: IconProps) {
 
 export function ExternalLinkIcon({ className = "w-4 h-4" }: IconProps) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

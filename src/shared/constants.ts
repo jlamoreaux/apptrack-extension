@@ -54,7 +54,7 @@ export const TOKEN_CONFIG = {
  */
 export const JOB_FIT_CONFIG = {
   CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours in ms
-  DWELL_DELAY_MS: 3000,             // 3s debounce before analysis fires
+  DWELL_DELAY_MS: 3000, // 3s debounce before analysis fires
 } as const;
 
 /**

@@ -9,22 +9,13 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-export function Input({
-  label,
-  error,
-  className = "",
-  id,
-  ...props
-}: InputProps) {
+export function Input({ label, error, className = "", id, ...props }: InputProps) {
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
 
   return (
     <div className="space-y-1">
       {label && (
-        <label
-          htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700"
-        >
+        <label htmlFor={inputId} className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}
@@ -48,28 +39,18 @@ export function Input({
 /**
  * Textarea variant
  */
-interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
 }
 
-export function Textarea({
-  label,
-  error,
-  className = "",
-  id,
-  ...props
-}: TextareaProps) {
+export function Textarea({ label, error, className = "", id, ...props }: TextareaProps) {
   const textareaId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
 
   return (
     <div className="space-y-1">
       {label && (
-        <label
-          htmlFor={textareaId}
-          className="block text-sm font-medium text-gray-700"
-        >
+        <label htmlFor={textareaId} className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}

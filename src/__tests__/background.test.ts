@@ -73,7 +73,10 @@ describe("Background Worker", () => {
         { id: 123, url: "https://example.com/jobs/123" },
       ]);
 
-      const tabs = await browserMock.tabs.query({ active: true, currentWindow: true }) as Array<{ id: number; url: string }>;
+      const tabs = (await browserMock.tabs.query({ active: true, currentWindow: true })) as Array<{
+        id: number;
+        url: string;
+      }>;
 
       expect(tabs[0]?.id).toBe(123);
       expect(browserMock.tabs.query).toHaveBeenCalledWith({
@@ -88,9 +91,9 @@ describe("Background Worker", () => {
         data: { title: "Software Engineer", company: "Acme Corp" },
       });
 
-      const response = await browserMock.tabs.sendMessage(123, {
+      const response = (await browserMock.tabs.sendMessage(123, {
         type: "EXTRACT_JOB_DATA",
-      }) as { success: boolean; data: { title: string; company: string } };
+      })) as { success: boolean; data: { title: string; company: string } };
 
       expect(response).toEqual({
         success: true,
@@ -113,9 +116,9 @@ describe("Background Worker", () => {
         userId: "user-123",
       });
 
-      const response = await browserMock.runtime.sendMessage({
+      const response = (await browserMock.runtime.sendMessage({
         type: "GET_AUTH_STATE",
-      }) as { isAuthenticated: boolean; userId: string };
+      })) as { isAuthenticated: boolean; userId: string };
 
       expect(response).toEqual({
         isAuthenticated: true,
@@ -139,7 +142,10 @@ describe("Background Worker", () => {
         apptrack_pending_saves: pendingSaves,
       });
 
-      const result = await browserMock.storage.local.get("apptrack_pending_saves") as Record<string, unknown>;
+      const result = (await browserMock.storage.local.get("apptrack_pending_saves")) as Record<
+        string,
+        unknown
+      >;
 
       expect(result.apptrack_pending_saves).toEqual(pendingSaves);
     });

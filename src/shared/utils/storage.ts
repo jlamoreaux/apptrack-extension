@@ -62,11 +62,7 @@ async function decrypt(data: string): Promise<string> {
     );
     const iv = combined.slice(0, 12);
     const encrypted = combined.slice(12);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encrypted
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
     return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error("[AppTrack] Decryption failed:", error);
@@ -124,9 +120,7 @@ export async function clear(): Promise<void> {
  * Get the current auth state (with decryption of auth token)
  */
 export async function getAuthState(): Promise<AuthState> {
-  const state = await get<AuthState & { encryptedToken?: string }>(
-    STORAGE_KEYS.AUTH_STATE
-  );
+  const state = await get<AuthState & { encryptedToken?: string }>(STORAGE_KEYS.AUTH_STATE);
 
   if (!state) {
     return { isAuthenticated: false };

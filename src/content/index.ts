@@ -188,7 +188,12 @@ function showSignInBanner(): void {
   const dismissBtn = el("button", { class: "apptrack-btn-close", title: "Dismiss" }, ["\u00d7"]);
   dismissBtn.addEventListener("click", () => showDismissOptions());
 
-  const inner = el("div", { class: "apptrack-inner" }, [makeIcon(), textSpan, signInBtn, dismissBtn]);
+  const inner = el("div", { class: "apptrack-inner" }, [
+    makeIcon(),
+    textSpan,
+    signInBtn,
+    dismissBtn,
+  ]);
   document.body.appendChild(el("div", { id: BANNER_ID }, [inner]));
 }
 
@@ -221,42 +226,59 @@ function showDismissOptions(): void {
 function showJobDetectedToast(jobData: JobData): void {
   injectStyles();
 
-  const textSpan = el("span", { style: "flex: 1; font-size: 14px; color: #1f2937; min-width: 0;" }, [
-    el("strong", { style: "display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" }, [
-      jobData.title ?? "Untitled Position",
-    ]),
-    el("span", { style: "color: #6b7280; font-size: 13px;" }, [jobData.company ?? "Unknown Company"]),
-  ]);
+  const textSpan = el(
+    "span",
+    { style: "flex: 1; font-size: 14px; color: #1f2937; min-width: 0;" },
+    [
+      el(
+        "strong",
+        {
+          style: "display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
+        },
+        [jobData.title ?? "Untitled Position"]
+      ),
+      el("span", { style: "color: #6b7280; font-size: 13px;" }, [
+        jobData.company ?? "Unknown Company",
+      ]),
+    ]
+  );
 
   const saveBtn = el("button", { class: "apptrack-btn-primary" }, ["Save"]);
-  saveBtn.addEventListener("click", () => { void (async () => {
-    saveBtn.textContent = "Saving...";
-    saveBtn.setAttribute("disabled", "true");
-    saveBtn.style.opacity = "0.7";
-    try {
-      const response: { success?: boolean } = await browser.runtime.sendMessage({
-        type: "SAVE_APPLICATION",
-        payload: {
-          jobTitle: jobData.title,
-          company: jobData.company,
-          jobUrl: jobData.url,
-          description: jobData.description ?? undefined,
-          location: jobData.location ?? undefined,
-          salary: jobData.salary ?? undefined,
-        },
-      });
+  saveBtn.addEventListener("click", () => {
+    void (async () => {
+      saveBtn.textContent = "Saving...";
+      saveBtn.setAttribute("disabled", "true");
+      saveBtn.style.opacity = "0.7";
+      try {
+        const response: { success?: boolean } = await browser.runtime.sendMessage({
+          type: "SAVE_APPLICATION",
+          payload: {
+            jobTitle: jobData.title,
+            company: jobData.company,
+            jobUrl: jobData.url,
+            description: jobData.description ?? undefined,
+            location: jobData.location ?? undefined,
+            salary: jobData.salary ?? undefined,
+          },
+        });
 
-      if (response?.success) {
-        showSavedConfirmation();
-      } else {
+        if (response?.success) {
+          showSavedConfirmation();
+        } else {
+          showSaveError(saveBtn);
+        }
+      } catch {
         showSaveError(saveBtn);
       }
-    } catch {
-      showSaveError(saveBtn);
-    }
-  })(); });
+    })();
+  });
 
-  const inner = el("div", { class: "apptrack-inner" }, [makeIcon(), textSpan, saveBtn, makeCloseBtn()]);
+  const inner = el("div", { class: "apptrack-inner" }, [
+    makeIcon(),
+    textSpan,
+    saveBtn,
+    makeCloseBtn(),
+  ]);
   document.body.appendChild(el("div", { id: BANNER_ID }, [inner]));
 }
 
@@ -308,9 +330,10 @@ async function initialize(): Promise<void> {
   // Check auth state
   let isAuthenticated = false;
   try {
-    const response: { success?: boolean; data?: { isAuthenticated: boolean } } = await browser.runtime.sendMessage({
-      type: "GET_AUTH_STATE",
-    });
+    const response: { success?: boolean; data?: { isAuthenticated: boolean } } =
+      await browser.runtime.sendMessage({
+        type: "GET_AUTH_STATE",
+      });
     isAuthenticated = response?.success === true && response.data?.isAuthenticated === true;
   } catch {
     return;
@@ -333,10 +356,11 @@ async function initialize(): Promise<void> {
 
   // Skip if already tracked
   try {
-    const dupResponse: { success?: boolean; data?: { exists: boolean } } = await browser.runtime.sendMessage({
-      type: "CHECK_DUPLICATE",
-      payload: { company: jobData.company, role: jobData.title },
-    });
+    const dupResponse: { success?: boolean; data?: { exists: boolean } } =
+      await browser.runtime.sendMessage({
+        type: "CHECK_DUPLICATE",
+        payload: { company: jobData.company, role: jobData.title },
+      });
     if (dupResponse?.success && dupResponse.data?.exists) return;
   } catch {
     // Continue even if duplicate check fails
@@ -349,17 +373,15 @@ async function initialize(): Promise<void> {
 // Message handler
 // ============================================================================
 
-browser.runtime.onMessage.addListener(
-  (message: unknown): Promise<unknown> | undefined => {
-    const msg = message as { type: string };
-    if (!msg || typeof msg.type !== "string") return undefined;
+browser.runtime.onMessage.addListener((message: unknown): Promise<unknown> | undefined => {
+  const msg = message as { type: string };
+  if (!msg || typeof msg.type !== "string") return undefined;
 
-    if (msg.type === "EXTRACT_JOB_DATA") {
-      return Promise.resolve({ success: true, data: extractJobData() });
-    }
-    return undefined;
+  if (msg.type === "EXTRACT_JOB_DATA") {
+    return Promise.resolve({ success: true, data: extractJobData() });
   }
-);
+  return undefined;
+});
 
 void initialize();
 

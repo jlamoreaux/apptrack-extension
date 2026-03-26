@@ -65,9 +65,7 @@ describe("Auth Callback URL Parsing", () => {
       error: encodeURIComponent("Invalid credentials provided"),
     });
 
-    expect(decodeURIComponent(params.get("error")!)).toBe(
-      "Invalid credentials provided"
-    );
+    expect(decodeURIComponent(params.get("error")!)).toBe("Invalid credentials provided");
   });
 });
 
@@ -82,8 +80,7 @@ describe("External Message Handler", () => {
 
     validUrls.forEach((url) => {
       const isValid =
-        url.startsWith("https://apptrack.ing/") ||
-        url.startsWith("https://www.apptrack.ing/");
+        url.startsWith("https://apptrack.ing/") || url.startsWith("https://www.apptrack.ing/");
       expect(isValid).toBe(true);
     });
   });
@@ -98,8 +95,7 @@ describe("External Message Handler", () => {
 
     invalidUrls.forEach((url) => {
       const isValid =
-        url.startsWith("https://apptrack.ing/") ||
-        url.startsWith("https://www.apptrack.ing/");
+        url.startsWith("https://apptrack.ing/") || url.startsWith("https://www.apptrack.ing/");
       expect(isValid).toBe(false);
     });
   });
@@ -170,9 +166,7 @@ describe("Token Refresh", () => {
     const mockRefreshToken = vi.fn();
     api.refreshToken = mockRefreshToken;
 
-    mockRefreshToken.mockRejectedValue(
-      new ApiClientError("Token expired", "TOKEN_EXPIRED", 401)
-    );
+    mockRefreshToken.mockRejectedValue(new ApiClientError("Token expired", "TOKEN_EXPIRED", 401));
 
     await expect(api.refreshToken()).rejects.toThrow("Token expired");
   });

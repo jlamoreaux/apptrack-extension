@@ -7,7 +7,8 @@ export default defineManifest((env) => {
   return {
     manifest_version: 3,
     name: "AppTrack - Job Application Tracker",
-    description: "Save job applications with one click. Auto-extract job details and sync to your AppTrack dashboard.",
+    description:
+      "Save job applications with one click. Auto-extract job details and sync to your AppTrack dashboard.",
     version: "0.1.0",
     icons: {
       "16": "icons/icon-16.png",

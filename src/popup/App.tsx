@@ -4,7 +4,13 @@
  */
 
 import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from "react";
-import type { ExtensionState, JobData, ApplicationPayload, JobFitStatus, JobFitResult } from "@/shared/types";
+import type {
+  ExtensionState,
+  JobData,
+  ApplicationPayload,
+  JobFitStatus,
+  JobFitResult,
+} from "@/shared/types";
 import { messages } from "@/shared/utils/messaging";
 import { STORAGE_KEYS, APP_URL } from "@/shared/constants";
 import {
@@ -135,7 +141,8 @@ function AppContent() {
 
       // Load settings (for autoAnalysis)
       const settings = await chrome.storage.local.get("apptrack_settings");
-      const autoAnalysis = (settings["apptrack_settings"] as { autoAnalysis?: boolean } | null)?.autoAnalysis ?? true;
+      const autoAnalysis =
+        (settings["apptrack_settings"] as { autoAnalysis?: boolean } | null)?.autoAnalysis ?? true;
 
       // Fetch job data from current tab
       const jobResult = await messages.getJobData();
@@ -349,10 +356,7 @@ function AppContent() {
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <Header
-              showLogout={state.view !== "logged_out"}
-              onLogout={handleLogout}
-            />
+            <Header showLogout={state.view !== "logged_out"} onLogout={handleLogout} />
           </div>
           {showSettingsButton && (
             <button
@@ -361,8 +365,18 @@ function AppContent() {
               title="Settings"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
             </button>
           )}
@@ -384,12 +398,8 @@ function AppContent() {
         {state.view === "already_tracked" && state.jobData && (
           <AlreadyTrackedView jobData={state.jobData} />
         )}
-        {state.view === "success" && (
-          <SuccessView wasQueued={state.wasQueued} />
-        )}
-        {state.view === "error" && (
-          <ErrorView message={state.error} onRetry={handleReset} />
-        )}
+        {state.view === "success" && <SuccessView wasQueued={state.wasQueued} />}
+        {state.view === "error" && <ErrorView message={state.error} onRetry={handleReset} />}
         {state.view === "settings" && (
           <SettingsView
             fullSiteAccess={state.fullSiteAccess}
@@ -422,9 +432,7 @@ function LoggedOutView() {
       <div className="text-brand-500 mb-4">
         <BriefcaseIcon className="w-16 h-16 mx-auto" />
       </div>
-      <h2 className="text-lg font-semibold text-gray-900 mb-2">
-        Track Your Applications
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-2">Track Your Applications</h2>
       <p className="text-gray-500 text-sm mb-6">
         Sign in to save job postings with one click and track your progress.
       </p>
@@ -450,12 +458,8 @@ function NoJobView() {
       <div className="text-gray-300 mb-3">
         <SearchIcon className="w-14 h-14 mx-auto" />
       </div>
-      <h2 className="text-base font-medium text-gray-700 mb-1">
-        No job posting detected
-      </h2>
-      <p className="text-gray-400 text-sm">
-        Navigate to a job listing page to save it
-      </p>
+      <h2 className="text-base font-medium text-gray-700 mb-1">No job posting detected</h2>
+      <p className="text-gray-400 text-sm">Navigate to a job listing page to save it</p>
       <div className="mt-6 pt-4 border-t border-gray-100">
         <Button
           variant="ghost"
@@ -495,9 +499,11 @@ function JobFitSection({ status, result }: JobFitSectionProps) {
           <div className="flex items-center gap-2 mb-1">
             <span
               className={`text-lg font-bold ${
-                result.overallScore >= 80 ? "text-green-600" :
-                result.overallScore >= 60 ? "text-yellow-600" :
-                "text-gray-500"
+                result.overallScore >= 80
+                  ? "text-green-600"
+                  : result.overallScore >= 60
+                    ? "text-yellow-600"
+                    : "text-gray-500"
               }`}
             >
               {result.overallScore}
@@ -542,9 +548,7 @@ function JobFitSection({ status, result }: JobFitSectionProps) {
         </div>
       )}
 
-      {status === "error" && (
-        <p className="text-xs text-gray-400">Analysis unavailable.</p>
-      )}
+      {status === "error" && <p className="text-xs text-gray-400">Analysis unavailable.</p>}
     </div>
   );
 }
@@ -597,9 +601,7 @@ function JobDetectedView({
           <h2 className="text-sm font-semibold text-gray-900 truncate">
             {jobData.title ?? "Job Title"}
           </h2>
-          <p className="text-sm text-gray-500 truncate">
-            {jobData.company ?? "Company"}
-          </p>
+          <p className="text-sm text-gray-500 truncate">{jobData.company ?? "Company"}</p>
         </div>
       </div>
 
@@ -662,11 +664,7 @@ function JobDetectedView({
       <JobFitSection status={jobFitStatus} result={jobFitResult} />
 
       {/* Error Message */}
-      {error && (
-        <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</div>}
 
       {/* Submit */}
       <Button type="submit" loading={loading} disabled={loading} className="w-full">
@@ -686,15 +684,11 @@ function AlreadyTrackedView({ jobData }: AlreadyTrackedViewProps) {
       <div className="text-yellow-500 mb-3">
         <ExclamationIcon className="w-12 h-12 mx-auto" />
       </div>
-      <h2 className="text-base font-medium text-gray-900 mb-1">
-        Already Tracking
-      </h2>
+      <h2 className="text-base font-medium text-gray-900 mb-1">Already Tracking</h2>
       <p className="text-gray-500 text-sm mb-1">
         {jobData.title ?? "This job"} at {jobData.company ?? "this company"}
       </p>
-      <p className="text-gray-400 text-xs mb-4">
-        is already in your applications
-      </p>
+      <p className="text-gray-400 text-xs mb-4">is already in your applications</p>
       <Button
         variant="secondary"
         onClick={() => chrome.tabs.create({ url: `${APP_URL}/dashboard` })}
@@ -717,18 +711,14 @@ function SuccessView({ wasQueued }: SuccessViewProps) {
       <div className="text-green-500 mb-3">
         <CheckCircleIcon className="w-14 h-14 mx-auto" />
       </div>
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">
-        Application Saved!
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-1">Application Saved!</h2>
       {wasQueued ? (
         <div className="flex items-center justify-center gap-1.5 text-amber-600 text-sm mb-4">
           <CloudOfflineIcon className="w-4 h-4" />
           <span>Queued for sync when online</span>
         </div>
       ) : (
-        <p className="text-gray-500 text-sm mb-4">
-          Added to your job tracker
-        </p>
+        <p className="text-gray-500 text-sm mb-4">Added to your job tracker</p>
       )}
       <Button
         onClick={() => chrome.tabs.create({ url: `${APP_URL}/dashboard` })}
@@ -737,12 +727,7 @@ function SuccessView({ wasQueued }: SuccessViewProps) {
         <ExternalLinkIcon className="w-4 h-4 mr-1.5" />
         View Dashboard
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => window.close()}
-        className="w-full mt-2"
-      >
+      <Button variant="ghost" size="sm" onClick={() => window.close()} className="w-full mt-2">
         Close
       </Button>
     </div>
@@ -760,12 +745,8 @@ function ErrorView({ message, onRetry }: ErrorViewProps) {
       <div className="text-red-500 mb-3">
         <ErrorIcon className="w-12 h-12 mx-auto" />
       </div>
-      <h2 className="text-base font-medium text-gray-900 mb-1">
-        Connection Error
-      </h2>
-      <p className="text-gray-500 text-sm mb-4">
-        {message ?? "Unable to connect to extension"}
-      </p>
+      <h2 className="text-base font-medium text-gray-900 mb-1">Connection Error</h2>
+      <p className="text-gray-500 text-sm mb-4">{message ?? "Unable to connect to extension"}</p>
       <Button variant="secondary" onClick={onRetry} className="w-full">
         Try Again
       </Button>
@@ -781,7 +762,13 @@ interface SettingsViewProps {
   onToggleAutoAnalysis: (enable: boolean) => Promise<void>;
 }
 
-function SettingsView({ fullSiteAccess, onToggleFullSite, onBack, autoAnalysis, onToggleAutoAnalysis }: SettingsViewProps) {
+function SettingsView({
+  fullSiteAccess,
+  onToggleFullSite,
+  onBack,
+  autoAnalysis,
+  onToggleAutoAnalysis,
+}: SettingsViewProps) {
   const [toggling, setToggling] = useState(false);
 
   const handleToggle = async () => {
@@ -802,7 +789,12 @@ function SettingsView({ fullSiteAccess, onToggleFullSite, onBack, autoAnalysis, 
           title="Back"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
         </button>
         <h2 className="text-base font-semibold text-gray-900">Settings</h2>
@@ -813,8 +805,8 @@ function SettingsView({ fullSiteAccess, onToggleFullSite, onBack, autoAnalysis, 
           <div className="flex-1">
             <p className="text-sm font-medium text-gray-900">Enable on all websites</p>
             <p className="text-xs text-gray-500 mt-0.5">
-              Detect job postings on any site, including company career pages not on the default list.
-              Chrome will ask for permission when you turn this on.
+              Detect job postings on any site, including company career pages not on the default
+              list. Chrome will ask for permission when you turn this on.
             </p>
           </div>
           <button
@@ -859,7 +851,8 @@ function SettingsView({ fullSiteAccess, onToggleFullSite, onBack, autoAnalysis, 
 
         <div className="pt-1">
           <p className="text-xs text-gray-400">
-            Default list covers LinkedIn, Indeed, Greenhouse, Lever, Workday, and 20+ other job boards.
+            Default list covers LinkedIn, Indeed, Greenhouse, Lever, Workday, and 20+ other job
+            boards.
           </p>
         </div>
       </div>

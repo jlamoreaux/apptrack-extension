@@ -51,7 +51,7 @@ export function extractFromJsonLd(): JobData | null {
           return {
             title: (typedItem.title as string) ?? null,
             company:
-              (typedItem.hiringOrganization as Record<string, unknown>)?.name as string ?? null,
+              ((typedItem.hiringOrganization as Record<string, unknown>)?.name as string) ?? null,
             url: window.location.href,
             description: (typedItem.description as string) ?? null,
             location: formatLocation(typedItem.jobLocation),
@@ -103,8 +103,9 @@ function extractFromGreenhouse(): JobData | null {
 
     // Location is next to the h1 in the job header
     const h1 = document.querySelector("h1");
-    const locationEl = h1?.parentElement?.querySelector("div:not(:has(h1))")
-      ?? h1?.parentElement?.parentElement?.querySelector('[class*="location"]');
+    const locationEl =
+      h1?.parentElement?.querySelector("div:not(:has(h1))") ??
+      h1?.parentElement?.parentElement?.querySelector('[class*="location"]');
     let location: string | null = null;
     if (locationEl) {
       // Get text but skip any img alt text
@@ -155,7 +156,8 @@ function extractFromGreenhouse(): JobData | null {
  * Scan DOM paragraphs for salary/compensation patterns
  */
 function extractSalaryFromDom(): string | null {
-  const salaryPattern = /\$[\d,]+(?:\.\d{2})?(?:\s*[-–—]\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:USD|CAD|GBP|EUR|per\s+\w+))?/i;
+  const salaryPattern =
+    /\$[\d,]+(?:\.\d{2})?(?:\s*[-–—]\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:USD|CAD|GBP|EUR|per\s+\w+))?/i;
   const paragraphs = document.querySelectorAll("p");
   for (const p of paragraphs) {
     const text = p.textContent?.trim();
@@ -174,9 +176,10 @@ function extractFromLever(): JobData | null {
   try {
     // Lever renders job data in standard HTML with known classes
     const title = document.querySelector(".posting-headline h2")?.textContent?.trim() ?? null;
-    const company = document.querySelector(".posting-headline .sort-by-time")?.textContent?.trim()
-      ?? extractCompanyFromUrl()
-      ?? null;
+    const company =
+      document.querySelector(".posting-headline .sort-by-time")?.textContent?.trim() ??
+      extractCompanyFromUrl() ??
+      null;
 
     // Lever has commitment, location, team in posting-categories
     const categories = document.querySelectorAll(".posting-categories .sort-by-time");
@@ -190,7 +193,8 @@ function extractFromLever(): JobData | null {
       location = parts.join(" / ");
     }
 
-    const description = document.querySelector(".posting-page .content")?.textContent?.trim() ?? null;
+    const description =
+      document.querySelector(".posting-page .content")?.textContent?.trim() ?? null;
 
     if (!title) return null;
 
@@ -238,10 +242,8 @@ export function extractFromMetaTags(): JobData {
   // Prefer h1 over generic og:title/page titles like "Job Details | Company"
   const ogTitle = getMeta("og:title");
   const h1Title = document.querySelector("h1")?.textContent?.trim() ?? null;
-  const title = (h1Title && h1Title.length < 200 ? h1Title : null)
-    ?? ogTitle
-    ?? document.title
-    ?? null;
+  const title =
+    (h1Title && h1Title.length < 200 ? h1Title : null) ?? ogTitle ?? document.title ?? null;
 
   // Try DOM-based fallbacks for location and salary
   if (!location) {
@@ -288,7 +290,7 @@ export function extractFromHeuristics(): JobData {
   const locationSelectors = [
     '[class*="location"]',
     '[data-testid*="location"]',
-    '.job-location',
+    ".job-location",
     '[class*="workplace"]',
   ];
 
@@ -302,9 +304,8 @@ export function extractFromHeuristics(): JobData {
   ];
 
   const title = findFirstText(titleSelectors);
-  const company = findFirstText(companySelectors)
-    ?? extractCompanyFromPageTitle()
-    ?? extractCompanyFromUrl();
+  const company =
+    findFirstText(companySelectors) ?? extractCompanyFromPageTitle() ?? extractCompanyFromUrl();
 
   // Try CSS selectors first, then fall back to DOM scanning
   const location = findFirstText(locationSelectors) ?? extractLocationNearTitle();
@@ -434,9 +435,7 @@ function extractCompanyFromUrl(): string | null {
  * e.g., "cloudflare" → "Cloudflare", "my-company" → "My Company"
  */
 function formatCompanySlug(slug: string): string {
-  return slug
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return slug.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
@@ -460,11 +459,9 @@ export function formatLocation(jobLocation: unknown): string | null {
   const address = loc.address as Record<string, string> | undefined;
 
   if (address) {
-    const parts = [
-      address.addressLocality,
-      address.addressRegion,
-      address.addressCountry,
-    ].filter(Boolean);
+    const parts = [address.addressLocality, address.addressRegion, address.addressCountry].filter(
+      Boolean
+    );
     return parts.length > 0 ? parts.join(", ") : null;
   }
 
