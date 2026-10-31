@@ -7,7 +7,7 @@ Save job applications with one click. Auto-extract job details and sync to your 
 ### Prerequisites
 
 - Node.js 20+
-- npm
+- npm 11+ (npm 10 crashes when resolving this dependency tree; `npm ci` from the lockfile works on either)
 
 ### Setup
 
